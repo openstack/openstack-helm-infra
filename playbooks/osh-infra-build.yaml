@@ -23,7 +23,7 @@
   tags:
     - build-helm-packages
 
-- hosts: all
+- hosts: primary
   vars_files:
     - vars.yaml
   vars:

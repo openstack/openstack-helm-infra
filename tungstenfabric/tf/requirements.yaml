@@ -1,0 +1,16 @@
+dependencies:
+  - name: helm-toolkit-contrail
+    repository: http://localhost:8879/charts
+    version: 0.1.0
+  - name: contrail-thirdparty
+    repository: http://localhost:8879/charts
+    version: 0.1.0
+  - name: contrail-controller
+    repository: http://localhost:8879/charts
+    version: 0.1.0
+  - name: contrail-analytics
+    repository: http://localhost:8879/charts
+    version: 0.1.0
+  - name: contrail-vrouter
+    repository: http://localhost:8879/charts
+    version: 0.1.0

@@ -1,0 +1,284 @@
+global:
+  images:
+    tags:
+      nodemgr: "docker.io/tungstenfabric/tf-nodemgr:latest"
+      zookeeper: "docker.io/tungstenfabric/tf-external-zookeeper:latest"
+      rabbitmq: "docker.io/tungstenfabric/tf-external-rabbitmq:latest"
+      contrail_status: "docker.io/tungstenfabric/tf-status:latest"
+      node_init: "docker.io/tungstenfabric/tf-node-init:latest"
+      contrail_control: "docker.io/tungstenfabric/tf-controller-control-control:latest"
+      control_dns: "docker.io/tungstenfabric/tf-controller-control-dns:latest"
+      control_named: "docker.io/tungstenfabric/tf-controller-control-named:latest"
+      config_api: "docker.io/tungstenfabric/tf-controller-config-api:latest"
+      config_devicemgr: "docker.io/tungstenfabric/tf-controller-config-devicemgr:latest"
+      config_schema_transformer: "docker.io/tungstenfabric/tf-controller-config-schema:latest"
+      config_svcmonitor: "docker.io/tungstenfabric/tf-controller-config-svcmonitor:latest"
+      webui_middleware: "docker.io/tungstenfabric/tf-controller-webui-job:latest"
+      webui: "docker.io/tungstenfabric/tf-controller-webui-web:latest"
+      dep_check: quay.io/stackanetes/kubernetes-entrypoint:v0.2.1
+    imagePullPolicy: "IfNotPresent"
+    # Specify imageCredentials
+    imageCredentials:
+      # registry: quay.io
+      # username: username
+      # password: password
+
+  tf_env:
+    CONTROLLER_NODES: 10.87.65.248
+    LOG_LEVEL: SYS_NOTICE
+    CLOUD_ORCHESTRATOR: openstack
+    AAA_MODE: cloud-admin
+    RABBITMQ_VHOST: "/"
+    RABBITMQ_USER: "guest"
+    RABBITMQ_PASSWORD: "guest"
+    RABBITMQ_NODE_PORT: 5673
+
+labels:
+  control:
+    node_selector_key: tungstenfabric.org/controller
+    node_selector_value: "enabled"
+  control_only:
+    node_selector_key: tungstenfabric.org/controller
+    node_selector_value: "enabled"
+  config:
+    node_selector_key: tungstenfabric.org/controller
+    node_selector_value: "enabled"
+  configdb:
+    node_selector_key: tungstenfabric.org/controller
+    node_selector_value: "enabled"
+  config_zookeeper:
+    node_selector_key: tungstenfabric.org/controller
+    node_selector_value: "enabled"
+  configdb_nodemgr:
+    node_selector_key: tungstenfabric.org/controller
+    node_selector_value: "enabled"
+  rabbitmq:
+    node_selector_key: tungstenfabric.org/controller
+    node_selector_value: "enabled"
+  webui:
+    node_selector_key: tungstenfabric.org/controller
+    node_selector_value: "enabled"
+
+dependencies:
+  config:
+    daemonset:
+    - tf-configdb
+  control:
+    daemonset:
+    - tf-config
+  webui:
+    daemonset:
+    - tf-config
+    - tf-redis
+  configdb:
+    daemonset:
+    - tf-config-zookeeper
+  configdb_nodemgr:
+    daemonset:
+    - tf-configdb
+  rabbitmq:
+    daemonset:
+    - tf-config-zookeeper
+    - tf-configdb
+
+# Names of secrets used by bootstrap and environmental checks
+secrets:
+  keystone:
+    admin: tf-controller-keystone-admin
+
+# typically overriden by environmental
+# values, but should include all endpoints
+# required by this chart
+endpoints:
+  cluster_domain_suffix: cluster.local
+  rabbitmq:
+    auth:
+      username: guest
+      password: guest
+    path: /
+    scheme: rabbit
+    port:
+      amqp:
+        default: 5673
+    hosts:
+      default: rabbitmq
+    host_fqdn_override:
+       default: null
+    domain_override: null
+  keystone:
+    auth:
+      username: admin
+      password: password
+      project_name: admin
+      user_domain_name: default
+      project_domain_name: default
+      region_name: RegionOne
+    hosts:
+      default: keystone-api
+    path:
+      default: /v3
+    port:
+      admin:
+        default: 35357
+      api:
+        default: 80
+    scheme:
+      default: http
+    host_fqdn_override:
+       default: null
+    namespace: openstack
+  nova_metadata:
+    name: nova
+    hosts:
+      default: metadata
+    host_fqdn_override:
+      default: null
+    path:
+      default: /
+    scheme:
+      default: 'http'
+    port:
+      metadata:
+        public: 80
+    namespace: openstack
+  nova:
+    name: nova
+    hosts:
+      default: nova-api
+      public: nova
+    host_fqdn_override:
+      default: null
+    path:
+      default: "/v2/%(tenant_id)s"
+    scheme:
+      default: 'http'
+    port:
+      api:
+        default: 8774
+        public: 80
+      novncproxy:
+        default: 6080
+    namespace: openstack
+  network:
+    name: neutron
+    hosts:
+      default: neutron-server
+      public: neutron
+    host_fqdn_override:
+      default: null
+    path:
+      default: null
+    scheme:
+      default: 'http'
+    port:
+      api:
+        default: 9696
+        public: 80
+    namespace: openstack
+  image:
+    name: glance
+    hosts:
+      default: glance-api
+      public: glance
+    host_fqdn_override:
+      default: null
+    path:
+      default: null
+    scheme:
+      default: http
+    port:
+      api:
+        default: 9292
+        public: 80
+    namespace: openstack
+  volume:
+    name: cinder
+    hosts:
+      default: cinder-api
+      public: cinder
+    host_fqdn_override:
+      default: null
+    path:
+      default: '/v1/%(tenant_id)s'
+    scheme:
+      default:  'http'
+    port:
+      api:
+        default: 8776
+        public: 80
+    namespace: openstack
+
+pod:
+  lifecycle:
+    upgrades:
+      daemonsets:
+        pod_replacement_strategy: RollingUpdate
+        control:
+          enabled: true
+          min_ready_seconds: 0
+          max_unavailable: 1
+        control_only:
+          enabled: true
+          min_ready_seconds: 0
+          max_unavailable: 1
+        config:
+          enabled: true
+          min_ready_seconds: 0
+          max_unavailable: 1
+        webui:
+          enabled: true
+          min_ready_seconds: 0
+          max_unavailable: 1
+        configdb:
+          enabled: true
+          min_ready_seconds: 0
+          max_unavailable: 1
+        config_zookeeper:
+          enabled: true
+          min_ready_seconds: 0
+          max_unavailable: 1
+        rabbitmq:
+          enabled: true
+          min_ready_seconds: 0
+          max_unavailable: 1
+        configdb_nodemgr:
+          enabled: true
+          min_ready_seconds: 0
+          max_unavailable: 1
+
+# Service related inputs are defined here
+service:
+  config_api_public_port: ""
+
+# Ingress related inputs are defined here
+ingress:
+  config_api_host: "tf-config-api"
+  webui_host: "tf-webui"
+
+# VolumeMounts related inputs are defined here
+volumeMounts:
+  host_usr_bin:
+    hostPath: '/usr/bin'
+
+manifests:
+  configmap_config_zookeeper: true
+  configmap_controller_env: true
+  configmap_controller_keystone: true
+  configmap_controller_rabbitmq: true
+  configmap_configdb: true
+  daemonset_configdb: true
+  daemonset_config_zookeeper: true
+  daemonset_configdb_nodemgr: true
+  daemonset_config: true
+  daemonset_control: true
+  daemonset_control_only: false
+  daemonset_webui: true
+  daemonset_rabbitmq: true
+  service_rabbitmq: true
+  service_config_api_server: true
+  service_config_ingress: true
+  service_web_controller: true
+  service_webui_ingress: true
+  ingress_webui: true
+  ingress_config_api: true
+  secret_controller_keystone_admin: true

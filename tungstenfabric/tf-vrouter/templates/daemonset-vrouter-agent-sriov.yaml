@@ -1,0 +1,339 @@
+{{- define "contrail.sriov.daemonset" }}
+{{- $daemonset_name := index . 0 }}
+{{- $config_map_name := index . 1 }}
+{{- $compute_name := index . 2 }}
+{{- $sriov_env := index . 3 }}
+{{- $context := index . 4 }}
+{{- $dependencies := $context.Values.dependencies.vrouter_agent_sriov }}
+{{- $agent_mode := $sriov_env.AGENT_MODE | default "kernel" }}
+{{- $uio_driver := $sriov_env.DPDK_UIO_DRIVER | default "kernel" }}
+
+{{- $_ := set $context.Values "images" $context.Values.global.images }}
+# host_os is a mandatory field
+{{- $_ := required ".Values.global.node.host_os must be specified, valid values are ubuntu, centos" $context.Values.global.node.host_os }}
+{{- $host_os := $context.Values.global.node.host_os }}
+
+{{- $serviceAccountName := "vrouter-agent-sriov" }}
+{{ tuple $context $dependencies $serviceAccountName | include "helm-toolkit.snippets.kubernetes_pod_rbac_serviceaccount" }}
+{{ tuple $context $serviceAccountName | include "helm-toolkit.snippets.kubernetes_pod_rbac_csr_role" }}
+---
+apiVersion: extensions/v1beta1
+kind: DaemonSet
+metadata:
+  name: {{ $daemonset_name }}
+spec:
+{{ tuple $context "vrouter_agent_sriov" | include "helm-toolkit.snippets.kubernetes_upgrades_daemonset" | indent 2 }}
+  template:
+    metadata:
+      labels:
+{{ tuple $context "tungstenfabric" "tf-vrouter-agent-sriov" | include "helm-toolkit.snippets.kubernetes_metadata_labels" | indent 8 }}
+      annotations:
+        configmap-hash: {{ tuple "configmap-env.yaml" $context | include "helm-toolkit.utils.hash" }}
+    spec:
+      serviceAccountName: {{ $serviceAccountName }}
+      #Disable affinity for single node setup
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: {{ $context.Values.labels.vrouter_agent_sriov.node_selector_key }}
+                operator: In
+                values:
+                  - {{ $context.Values.labels.vrouter_agent_sriov.node_selector_value }}
+              - key: "kubernetes.io/hostname"
+                operator: In
+                values:
+                  - {{ $compute_name }}
+      #Enable tolerations for single node setup
+      tolerations:
+      - key: node-role.kubernetes.io/master
+        operator: Exists
+        effect: NoSchedule
+      hostNetwork: true
+      hostPID: true
+      dnsPolicy: ClusterFirstWithHostNet
+      imagePullSecrets:
+        - name: tf-vrouter-docker-secret
+      initContainers:
+{{ tuple $context $dependencies nil | include "helm-toolkit.snippets.kubernetes_entrypoint_init_container" | indent 8 }}
+        - name: tf-node-init
+          image: {{ $context.Values.global.images.tags.node_init | quote }}
+          imagePullPolicy: {{ default "" $context.Values.global.images.imagePullPolicy | quote }}
+          securityContext:
+            privileged: true
+          env:
+          - name: CONTRAIL_STATUS_IMAGE
+            value: {{ $context.Values.global.images.tags.tf_status | quote }}
+          envFrom:
+          - configMapRef:
+              name: {{ $config_map_name }}
+          volumeMounts:
+          - mountPath: /host/usr/bin
+            name: host-usr-bin
+          - mountPath: /etc/contrail/ssl
+            name: ssl-dir
+          - mountPath: /etc/sysctl.conf
+            name: host-sysctl-conf
+{{- if and $agent_mode ( eq $agent_mode "kernel" ) }}
+{{- if eq $host_os "ubuntu"}}
+        - name: tf-vrouter-init-kernel
+          image: {{ $context.Values.global.images.tags.build_driver_init | quote }}
+          imagePullPolicy: {{ default "" $context.Values.global.images.imagePullPolicy | quote }}
+          securityContext:
+            privileged: true
+          envFrom:
+          - configMapRef:
+              name: tf-vrouter-kernel
+          - configMapRef:
+              name: tf-vrouter-keystone
+          env:
+          - name: KEYSTONE_AUTH_ADMIN_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: {{ .Values.secrets.keystone.admin }}
+                key: KEYSTONE_AUTH_ADMIN_PASSWORD
+          volumeMounts:
+          - mountPath: /usr/src
+            name: usr-src
+          - mountPath: /lib/modules
+            name: lib-modules
+          - mountPath: /host/bin
+            name: host-bin
+{{- else if $host_os "centos" }}
+        - name: tf-vrouter-init-kernel
+          image: {{ $context.Values.global.images.tags.vrouter_init_kernel | quote }}
+          imagePullPolicy: {{ default "" $context.Values.global.images.imagePullPolicy | quote }}
+          securityContext:
+            privileged: true
+          envFrom:
+          - configMapRef:
+              name: configmap-vrouter
+          - configMapRef:
+              name: tf-vrouter-keystone
+          env:
+          - name: KEYSTONE_AUTH_ADMIN_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: {{ .Values.secrets.keystone.admin }}
+                key: KEYSTONE_AUTH_ADMIN_PASSWORD
+          volumeMounts:
+          - mountPath: /lib/modules
+            name: lib-modules
+          - mountPath: /etc/sysconfig/network-scripts
+            name: network-scripts
+          - mountPath: /host/bin
+            name: host-bin
+{{- end }}
+{{- else if and $agent_mode ( eq $agent_mode "dpdk" ) }}
+{{- if and (eq $host_os "ubuntu") (eq $uio_driver "mlnx") }}
+        - name: tf-vrouter-plugin-mellanox-init
+          image: {{ $context.Values.global.images.tags.vrouter_plugin_mellanox_init | quote }}
+          imagePullPolicy: {{ default "" $context.Values.global.images.imagePullPolicy | quote }}
+          securityContext:
+            privileged: true
+          envFrom:
+          - configMapRef:
+              name: tf-vrouter-dpdk
+          volumeMounts:
+          - mountPath: /lib/modules
+            name: lib-modules
+          - mountPath: /usr/src
+            name: usr-src
+{{- end }}
+        - name: tf-vrouter-init-dpdk
+          image: {{ $context.Values.global.images.tags.vrouter_init_dpdk | quote }}
+          imagePullPolicy: {{ default "" $context.Values.global.images.imagePullPolicy | quote }}
+          securityContext:
+            privileged: true
+          envFrom:
+          - configMapRef:
+              name: tf-vrouter-dpdk
+          - configMapRef:
+              name: tf-vrouter-keystone
+          env:
+          - name: KEYSTONE_AUTH_ADMIN_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: {{ .Values.secrets.keystone.admin }}
+                key: KEYSTONE_AUTH_ADMIN_PASSWORD
+          volumeMounts:
+          - mountPath: /lib/modules
+            name: lib-modules
+          - mountPath: /var/run
+            name: var-run
+          - mountPath: /etc/os-release
+            name: os-release
+          - mountPath: /etc/lsb-release
+            name: lsb-release
+          - mountPath: /dev/hugepages
+            name: hugepages
+{{- end }}
+      containers:
+{{- if and $agent_mode ( eq $agent_mode "dpdk" ) }}
+        - name: tf-vrouter-dpdk
+          image: {{ $context.Values.global.images.tags.vrouter_dpdk | quote }}
+          imagePullPolicy: {{ default "" $context.Values.global.images.imagePullPolicy | quote }}
+          securityContext:
+            privileged: true
+          envFrom:
+          - configMapRef:
+              name: tf-vrouter-dpdk
+          - configMapRef:
+              name: tf-vrouter-keystone
+          env:
+          - name: KEYSTONE_AUTH_ADMIN_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: {{ .Values.secrets.keystone.admin }}
+                key: KEYSTONE_AUTH_ADMIN_PASSWORD
+          volumeMounts:
+          - mountPath: /etc/
+            name: mount-etc
+          - mountPath: /lib/modules
+            name: lib-modules
+          - mountPath: /var/run
+            name: var-run
+          - mountPath: /var/lib/contrail
+            name: var-lib-contrail
+          - mountPath: /var/log/contrail
+            name: tf-log
+          - mountPath: /etc/os-release
+            name: os-release
+          - mountPath: /etc/lsb-release
+            name: lsb-release
+          - mountPath: /dev
+            name: host-dev
+          - mountPath: /var/crashes
+            name: var-crashes-vrouter
+{{- end }}
+      - name: tf-vrouter-agent
+        image: {{ $context.Values.global.images.tags.vrouter_agent | quote }}
+        imagePullPolicy: {{ default "" $context.Values.global.images.imagePullPolicy | quote }}
+        securityContext:
+          privileged: true
+        envFrom:
+        - configMapRef:
+            name: {{ $config_map_name }}
+        - configMapRef:
+            name: tf-vrouter-keystone
+        env:
+        - name: KEYSTONE_AUTH_ADMIN_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.secrets.keystone.admin }}
+              key: KEYSTONE_AUTH_ADMIN_PASSWORD
+        volumeMounts:
+{{- if eq $host_os "centos"}}
+        - mountPath: /etc/sysconfig/network-scripts
+          name: network-scripts
+{{- end }}
+        - mountPath: /lib/modules
+          name: lib-modules
+        - mountPath: /var/lib/contrail/
+          name: var-lib-contrail
+        - mountPath: /var/log/contrail/
+          name: tf-log
+        - mountPath: /var/crashes
+          name: var-crashes-vrouter
+        - mountPath: /host/bin
+          name: host-bin
+        - mountPath: /dev/log
+          name: host-dev-log
+        - mountPath: /var/run
+          name: var-run
+        - mountPath: /etc/contrail/ssl
+          name: ssl-dir
+      - name: tf-vrouter-nodemgr
+        image: {{ $context.Values.global.images.tags.nodemgr | quote }}
+        imagePullPolicy: {{ default "" $context.Values.global.images.imagePullPolicy | quote }}
+        envFrom:
+        - configMapRef:
+            name: {{ $config_map_name }}
+        - configMapRef:
+            name: tf-vrouter-keystone
+        env:
+        - name: NODE_TYPE
+          value: vrouter
+        - name: DOCKER_HOST
+          value: "unix://mnt/docker.sock"
+        - name: KEYSTONE_AUTH_ADMIN_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.secrets.keystone.admin }}
+              key: KEYSTONE_AUTH_ADMIN_PASSWORD
+        volumeMounts:
+        - mountPath: /mnt/docker.sock
+          name: docker-unix-socket
+        - mountPath: /var/log/contrail/
+          name: tf-log
+        - mountPath: /var/crashes
+          name: var-crashes-vrouter
+        - mountPath: /etc/contrail/ssl
+          name: ssl-dir
+      volumes:
+{{- if eq $host_os "ubuntu"}}
+      - name: usr-src
+        hostPath:
+          path: /usr/src
+{{- else if $host_os "centos" }}
+      - name: network-scripts
+        hostPath:
+          path: /etc/sysconfig/network-scripts
+{{- end }}
+      - name: lib-modules
+        hostPath:
+          path: /lib/modules
+      - name: docker-unix-socket
+        hostPath:
+          path: /var/run/docker.sock
+          type: Socket
+      - name: os-release
+        hostPath:
+          path: /usr/lib/os-release
+      - name: lsb-release
+        hostPath:
+          path: /etc/lsb-release
+      - name: hugepages
+        hostPath:
+          path: /dev/hugepages
+      - name: var-run
+        hostPath:
+          path: /var/run/
+      - name: var-lib-contrail
+        hostPath:
+          path: /var/lib/contrail/
+      - name: tf-log
+        hostPath:
+          path: /var/log/contrail
+      - name: var-crashes-vrouter
+        hostPath:
+          path: /var/crashes
+      - name: host-bin
+        hostPath:
+          path: /bin
+      - name: host-usr-bin
+        hostPath:
+          path: {{ .Values.volumeMounts.host_usr_bin.hostPath }}
+      - name: host-dev-log
+        hostPath:
+          path: /dev/log
+      - name: ssl-dir
+        hostPath:
+          path: /etc/contrail/ssl
+      - name: host-sysctl-conf
+        hostPath:
+          path: /etc/sysctl.conf
+{{- end }}
+
+{{- if .Values.manifests.daemonset_vrouter_sriov }}
+{{- $_ := required ".Values.global.tf_env_vrouter_sriov.per_compute_info must be specified" .Values.global.tf_env_vrouter_sriov.per_compute_info }}
+{{- $context := . }}
+{{- range $_, $compute_vars := .Values.global.tf_env_vrouter_sriov.per_compute_info }}
+{{- $compute_name := index $compute_vars "node_name" }}
+{{- $sriov_env := omit $compute_vars "node_name" }}
+{{- $daemonset_name := printf "tf-vrouter-agent-sriov-%s" $compute_name }}
+{{- $config_map_name := printf "tf-vrouter-sriov-%s" $compute_name }}
+{{- list $daemonset_name $config_map_name $compute_name $sriov_env $context | include "contrail.sriov.daemonset" }}
+{{- end }}
+{{- end }}

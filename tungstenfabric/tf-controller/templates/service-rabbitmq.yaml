@@ -1,0 +1,15 @@
+{{- if .Values.manifests.service_rabbitmq }}
+{{- $context := . }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: rabbitmq
+spec:
+  ports:
+  - name: nodeport
+    port: {{ .Values.service.rabbitmq_public_port | default 5673 }}
+    targetPort: {{ .Values.global.tf_env.RABBITMQ_NODE_PORT | default 5673 }}
+  selector:
+{{ tuple $context "tungstenfabric" "rabbitmq" | include "helm-toolkit.snippets.kubernetes_metadata_labels" | indent 4 }}
+  type: ClusterIP
+{{- end }}

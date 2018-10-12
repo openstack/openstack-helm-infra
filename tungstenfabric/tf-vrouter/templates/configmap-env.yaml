@@ -1,0 +1,81 @@
+{{- $context := . }}
+{{- $keystone_auth_host := tuple "keystone" "internal" $context | include "helm-toolkit.endpoints.hostname_namespaced_endpoint_lookup" }}
+
+{{- if not .Values.global.tf_env_vrouter_kernel -}}
+{{- $_ := set .Values.global "tf_env_vrouter_kernel" dict -}}
+{{- end -}}
+
+{{- if not .Values.global.tf_env_vrouter_dpdk -}}
+{{- $_ := set .Values.global "tf_env_vrouter_dpdk" dict -}}
+{{- end -}}
+
+{{- if .Values.manifests.configmap_vrouter_kernel }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tf-vrouter-kernel
+data:
+  {{- range $key, $value := .Values.global.tf_env }}
+  {{ $key }}: {{ $value | quote }}
+  {{- end }}
+  {{- range $key, $value := .Values.global.tf_env_vrouter_kernel }}
+  {{ $key }}: {{ $value | quote }}
+  {{- end }}
+{{- end }}
+
+{{- if .Values.manifests.configmap_vrouter_dpdk }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tf-vrouter-dpdk
+data:
+  {{- range $key, $value := .Values.global.tf_env }}
+  {{ $key }}: {{ $value | quote }}
+  {{- end }}
+  {{- range $key, $value := .Values.global.tf_env_vrouter_dpdk }}
+  {{ $key }}: {{ $value | quote }}
+  {{- end }}
+{{- end }}
+
+{{- if .Values.manifests.configmap_vrouter_sriov }}
+{{- $_ := required ".Values.global.tf_env_vrouter_sriov.per_compute_info must be specified" .Values.global.tf_env_vrouter_sriov.per_compute_info }}
+{{- $common_sriov_vars := .Values.global.tf_env_vrouter_sriov }}
+{{- $per_compute_info := .Values.global.tf_env_vrouter_sriov.per_compute_info }}
+{{- range $_, $compute_vars := $per_compute_info }}
+{{- $compute_name := index $compute_vars "node_name" }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tf-vrouter-sriov-{{ $compute_name }}
+data:
+  {{- range $key, $value := $compute_vars }}
+  {{ $key }}: {{ $value | quote }}
+  {{- end }}
+  {{- range $key, $value := $common_sriov_vars }}
+  {{ if ne $key "per_compute_info" }}{{ $key }}: {{ $value | quote }}{{ end }}
+  {{- end }}
+{{- end }}
+{{- end }}
+
+
+{{- if .Values.manifests.configmap_vrouter_keystone }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tf-vrouter-keystone
+data:
+  KEYSTONE_AUTH_ADMIN_USER: {{ .Values.endpoints.keystone.auth.username }}
+  KEYSTONE_AUTH_ADMIN_TENANT: {{ .Values.endpoints.keystone.auth.project_name }}
+  KEYSTONE_AUTH_USER_DOMAIN_NAME: {{ .Values.endpoints.keystone.auth.user_domain_name }}
+  KEYSTONE_AUTH_PROJECT_DOMAIN_NAME: {{ .Values.endpoints.keystone.auth.project_domain_name }}
+  KEYSTONE_AUTH_URL_VERSION: {{ .Values.endpoints.keystone.path.default }}
+  KEYSTONE_AUTH_HOST: {{ $keystone_auth_host }}
+  KEYSTONE_AUTH_PROTO: {{ .Values.endpoints.keystone.scheme.default }}
+  KEYSTONE_AUTH_ADMIN_PORT: {{ .Values.endpoints.keystone.port.admin.default | quote }}
+  KEYSTONE_AUTH_PUBLIC_PORT: {{ .Values.endpoints.keystone.port.api.default | quote }}
+  KEYSTONE_AUTH_REGION_NAME: {{ .Values.endpoints.keystone.auth.region_name | quote }}
+{{- end }}

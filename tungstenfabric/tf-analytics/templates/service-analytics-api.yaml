@@ -1,0 +1,18 @@
+{{- if .Values.manifests.service_analytics_api_server }}
+{{- $context := . }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: analytics-api-server
+spec:
+  ports:
+  - name: api
+    port: {{ .Values.service.analytics_api_public_port | default 8081 }}
+    targetPort: {{ .Values.global.tf_env.ANALYTICS_API_PORT | default 8081 }}
+  - name: introspect
+    port: {{ .Values.service.analytics_introspect_public_port | default 8090 }}
+    targetPort: {{ .Values.global.tf_env.ANALYTICS_API_INTROSPECT_PORT | default 8090 }}
+  selector:
+{{ tuple $context "opentf" "tf-analytics" | include "helm-toolkit.snippets.kubernetes_metadata_labels" | indent 4 }}
+  type: ClusterIP
+{{- end }}

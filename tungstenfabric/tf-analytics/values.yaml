@@ -1,0 +1,174 @@
+global:
+  images:
+    tags:
+      kafka: "docker.io/tungstenfabricnightly/tf-external-kafka:latest"
+      cassandra: "docker.io/tungstenfabricnightly/tf-external-cassandra:latest"
+      redis: "docker.io/tungstenfabricnightly/tf-external-redis:latest"
+      zookeeper: "docker.io/tungstenfabricnightly/tf-external-zookeeper:latest"
+      nodemgr: "docker.io/tungstenfabricnightly/tf-nodemgr:latest"
+      contrail_status: "docker.io/tungstenfabricnightly/tf-status:latest"
+      node_init: "docker.io/tungstenfabricnightly/tf-node-init:latest"
+      analytics_api: "docker.io/tungstenfabricnightly/tf-analytics-api:latest"
+      contrail_collector: "docker.io/tungstenfabricnightly/tf-analytics-collector:latest"
+      analytics_alarm_gen: "docker.io/tungstenfabricnightly/tf-analytics-alarm-gen:latest"
+      analytics_query_engine: "docker.io/tungstenfabricnightly/tf-analytics-query-engine:latest"
+      analytics_snmp_collector: "docker.io/tungstenfabricnightly/tf-analytics-snmp-collector:latest"
+      contrail_topology: "docker.io/tungstenfabricnightly/tf-analytics-topology:latest"
+      dep_check: quay.io/stackanetes/kubernetes-entrypoint:v0.2.1
+    imagePullPolicy: "IfNotPresent"
+    # Specify imageCredentials
+    imageCredentials:
+      # registry: quay.io
+      # username: username
+      # password: password
+
+  tf_env:
+    CONTROLLER_NODES: 10.87.65.248
+    LOG_LEVEL: SYS_NOTICE
+    CLOUD_ORCHESTRATOR: openstack
+    AAA_MODE: cloud-admin
+
+labels:
+  analytics:
+    node_selector_key: tungstenfabric.org/controller
+    node_selector_value: "enabled"
+  analyticsdb:
+    node_selector_key: tungstenfabric.org/controller
+    node_selector_value: "enabled"
+  analytics_zookeeper:
+    node_selector_key: tungstenfabric.org/controller
+    node_selector_value: "enabled"
+  redis:
+    node_selector_key: tungstenfabric.org/controller
+    node_selector_value: "enabled"
+  kafka:
+    node_selector_key: tungstenfabric.org/controller
+    node_selector_value: "enabled"
+  analyticsdb_nodemgr:
+    node_selector_key: tungstenfabric.org/controller
+    node_selector_value: "enabled"
+  
+
+
+dependencies:
+  kafka:
+    daemonset:
+    - tf-analytics-zookeeper
+  analyticsdb:
+    daemonset:
+    - tf-analytics-zookeeper
+    - tf-kafka
+  analyticsdb_nodemgr:
+    daemonset:
+    - tf-analyticsdb
+  analytics:
+    daemonset:
+    - tf-analyticsdb
+    - tf-config
+
+# Names of secrets used by bootstrap and environmental checks
+secrets:
+  keystone:
+    admin: tf-analytics-keystone-admin
+
+# typically overriden by environmental
+# values, but should include all endpoints
+# required by this chart
+endpoints:
+  cluster_domain_suffix: cluster.local
+  rabbitmq:
+    auth:
+      username: guest
+      password: guest
+    path: /
+    scheme: rabbit
+    port:
+      amqp:
+        default: 5673
+    hosts:
+      default: rabbitmq
+    host_fqdn_override:
+       default: null
+    domain_override: null
+  keystone:
+    auth:
+      username: admin
+      password: password
+      project_name: admin
+      user_domain_name: default
+      project_domain_name: default
+      region_name: RegionOne
+    hosts:
+      default: keystone-api
+    path:
+      default: /v3
+    port:
+      admin:
+        default: 35357
+      api:
+        default: 80
+    scheme:
+      default: http
+    host_fqdn_override:
+       default: null
+    namespace: openstack
+
+pod:
+  lifecycle:
+    upgrades:
+      daemonsets:
+        pod_replacement_strategy: RollingUpdate
+        analytics:
+          enabled: true
+          min_ready_seconds: 0
+          max_unavailable: 1
+        analyticsdb:
+          enabled: true
+          min_ready_seconds: 0
+          max_unavailable: 1
+        analytics_zookeeper:
+          enabled: true
+          min_ready_seconds: 0
+          max_unavailable: 1
+        redis:
+          enabled: true
+          min_ready_seconds: 0
+          max_unavailable: 1
+        kafka:
+          enabled: true
+          min_ready_seconds: 0
+          max_unavailable: 1
+        analyticsdb_nodemgr:
+          enabled: true
+          min_ready_seconds: 0
+          max_unavailable: 1
+
+# Service related inputs are defined here
+service:
+  analytics_api_public_port: ""
+
+# Ingress related inputs are defined here
+ingress:
+  analytics_api_host: "tf-analytics-api"
+
+# VolumeMounts related inputs are defined here
+volumeMounts:
+  host_usr_bin:
+    hostPath: '/usr/bin'
+
+manifests:
+  configmap_analytics_env: true
+  configmap_analytics_keystone: true
+  configmap_analytics_rabbitmq: true
+  configmap_analytics_zookeeper: true
+  configmap_analyticsdb: true
+  daemonset_analytics: true
+  daemonset_analyticsdb: true
+  daemonset_redis: true
+  daemonset_analytics_zookeeper: true
+  daemonset_kafka: true
+  daemonset_analyticsdb_nodemgr: true
+  service_analytics_api_server: true
+  service_analytics_api_ingress: true
+  ingress_analytics_api: true
+  secret_analytics_keystone_admin: true

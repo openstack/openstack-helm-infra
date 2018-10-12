@@ -1,0 +1,229 @@
+{{- if .Values.manifests.daemonset_kernel }}
+{{- $_ := set .Values "images" .Values.global.images }}
+{{- $context := . }}
+{{- $dependencies := .Values.dependencies.vrouter_agent_kernel }}
+# host_os is a mandatory field
+{{- $_ := required ".Values.global.node.host_os must be specified, valid values are ubuntu, centos" .Values.global.node.host_os }}
+{{- $host_os := .Values.global.node.host_os }}
+
+{{- $serviceAccountName := "vrouter-agent-kernel" }}
+{{ tuple $context $dependencies $serviceAccountName | include "helm-toolkit.snippets.kubernetes_pod_rbac_serviceaccount" }}
+{{ tuple $context $serviceAccountName | include "helm-toolkit.snippets.kubernetes_pod_rbac_csr_role" }}
+---
+apiVersion: extensions/v1beta1
+kind: DaemonSet
+metadata:
+  name: tf-vrouter-agent-kernel
+spec:
+{{ tuple $context "vrouter_agent_kernel" | include "helm-toolkit.snippets.kubernetes_upgrades_daemonset" | indent 2 }}
+  template:
+    metadata:
+      labels:
+{{ tuple $context "tungstenfabric" "tf-vrouter-agent-kernel" | include "helm-toolkit.snippets.kubernetes_metadata_labels" | indent 8 }}
+      annotations:
+        configmap-hash: {{ tuple "configmap-env.yaml" $context | include "helm-toolkit.utils.hash" }}
+    spec:
+      serviceAccountName: {{ $serviceAccountName }}
+      #Disable affinity for single node setup
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: {{ .Values.labels.vrouter_agent_kernel.node_selector_key }}
+                operator: In
+                values:
+                - {{ .Values.labels.vrouter_agent_kernel.node_selector_value }}
+      #Enable tolerations for single node setup
+      tolerations:
+      - key: node-role.kubernetes.io/master
+        operator: Exists
+        effect: NoSchedule
+      hostNetwork: true
+      hostPID: true
+      dnsPolicy: ClusterFirstWithHostNet
+      imagePullSecrets:
+        - name: tf-vrouter-docker-secret
+      initContainers:
+{{ tuple $context $dependencies nil | include "helm-toolkit.snippets.kubernetes_entrypoint_init_container" | indent 8 }}
+        - name: tf-node-init
+          image: {{ .Values.global.images.tags.node_init | quote }}
+          imagePullPolicy: {{ default "" .Values.global.images.imagePullPolicy | quote }}
+          securityContext:
+            privileged: true
+          env:
+          - name: CONTRAIL_STATUS_IMAGE
+            value: {{ .Values.global.images.tags.tf_status | quote }}
+          envFrom:
+          - configMapRef:
+              name: tf-vrouter-kernel
+          volumeMounts:
+          - mountPath: /host/usr/bin
+            name: host-usr-bin
+          - mountPath: /etc/contrail/ssl
+            name: ssl-dir
+          - mountPath: /etc/sysctl.conf
+            name: host-sysctl-conf
+{{- if eq $host_os "ubuntu"}}
+        - name: tf-vrouter-init-kernel
+          image: {{ .Values.global.images.tags.build_driver_init | quote }}
+          imagePullPolicy: {{ default "" .Values.global.images.imagePullPolicy | quote }}
+          securityContext:
+            privileged: true
+          envFrom:
+          - configMapRef:
+              name: tf-vrouter-kernel
+          - configMapRef:
+              name: tf-vrouter-keystone
+          env:
+          - name: KEYSTONE_AUTH_ADMIN_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: {{ .Values.secrets.keystone.admin }}
+                key: KEYSTONE_AUTH_ADMIN_PASSWORD
+          volumeMounts:
+          - mountPath: /usr/src
+            name: usr-src
+          - mountPath: /lib/modules
+            name: lib-modules
+          - mountPath: /host/bin
+            name: host-bin
+{{- else if eq $host_os "centos" }}
+        - name: tf-vrouter-init-kernel
+          image: {{ .Values.global.images.tags.vrouter_init_kernel | quote }}
+          imagePullPolicy: {{ default "" .Values.global.images.imagePullPolicy | quote }}
+          securityContext:
+            privileged: true
+          envFrom:
+          - configMapRef:
+              name: configmap-vrouter
+          - configMapRef:
+              name: tf-vrouter-keystone
+          env:
+          - name: KEYSTONE_AUTH_ADMIN_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: {{ .Values.secrets.keystone.admin }}
+                key: KEYSTONE_AUTH_ADMIN_PASSWORD
+          volumeMounts:
+          - mountPath: /lib/modules
+            name: lib-modules
+          - mountPath: /etc/sysconfig/network-scripts
+            name: network-scripts
+          - mountPath: /host/bin
+            name: host-bin
+{{- end }}
+      containers:
+      - name: tf-vrouter-agent
+        image: {{ .Values.global.images.tags.vrouter_agent | quote }}
+        imagePullPolicy: {{ default "" .Values.global.images.imagePullPolicy | quote }}
+        securityContext:
+          privileged: true
+        envFrom:
+        - configMapRef:
+            name: tf-vrouter-kernel
+        - configMapRef:
+            name: tf-vrouter-keystone
+        env:
+        - name: KEYSTONE_AUTH_ADMIN_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.secrets.keystone.admin }}
+              key: KEYSTONE_AUTH_ADMIN_PASSWORD
+        lifecycle:
+          preStop:
+            exec:
+              command: ["/clean-up.sh"]
+        volumeMounts:
+{{- if eq $host_os "centos"}}
+        - mountPath: /etc/sysconfig/network-scripts
+          name: network-scripts
+{{- end }}
+        - mountPath: /lib/modules
+          name: lib-modules
+        - mountPath: /var/lib/contrail/
+          name: var-lib-contrail
+        - mountPath: /var/log/contrail/
+          name: tf-log
+        - mountPath: /var/crashes
+          name: var-crashes-vrouter
+        - mountPath: /host/bin
+          name: host-bin
+        - mountPath: /dev/log
+          name: host-dev-log
+        - mountPath: /var/run
+          name: var-run
+        - mountPath: /etc/contrail/ssl
+          name: ssl-dir
+      - name: tf-vrouter-nodemgr
+        image: {{ .Values.global.images.tags.nodemgr | quote }}
+        imagePullPolicy: {{ default "" .Values.global.images.imagePullPolicy | quote }}
+        envFrom:
+        - configMapRef:
+            name: tf-vrouter-kernel
+        - configMapRef:
+            name: tf-vrouter-keystone
+        env:
+        - name: NODE_TYPE
+          value: vrouter
+        - name: DOCKER_HOST
+          value: "unix://mnt/docker.sock"
+        - name: KEYSTONE_AUTH_ADMIN_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.secrets.keystone.admin }}
+              key: KEYSTONE_AUTH_ADMIN_PASSWORD
+        volumeMounts:
+        - mountPath: /mnt/docker.sock
+          name: docker-unix-socket
+        - mountPath: /var/log/contrail/
+          name: tf-log
+        - mountPath: /var/crashes
+          name: var-crashes-vrouter
+        - mountPath: /etc/contrail/ssl
+          name: ssl-dir
+      volumes:
+{{- if eq $host_os "ubuntu"}}
+      - name: usr-src
+        hostPath:
+          path: /usr/src
+{{- else if $host_os "centos" }}
+      - name: network-scripts
+        hostPath:
+          path: /etc/sysconfig/network-scripts
+{{- end }}
+      - name: lib-modules
+        hostPath:
+          path: /lib/modules
+      - name: docker-unix-socket
+        hostPath:
+          path: /var/run/docker.sock
+          type: Socket
+      - name: var-run
+        hostPath:
+          path: /var/run
+      - name: var-lib-contrail
+        hostPath:
+          path: /var/lib/contrail/
+      - name: tf-log
+        hostPath:
+          path: /var/log/contrail
+      - name: var-crashes-vrouter
+        hostPath:
+          path: /var/crashes
+      - name: host-bin
+        hostPath:
+          path: /bin
+      - name: host-usr-bin
+        hostPath:
+          path: {{ .Values.volumeMounts.host_usr_bin.hostPath }}
+      - name: host-dev-log
+        hostPath:
+          path: /dev/log
+      - name: ssl-dir
+        hostPath:
+          path: /etc/contrail/ssl
+      - name: host-sysctl-conf
+        hostPath:
+          path: /etc/sysctl.conf
+{{- end }}

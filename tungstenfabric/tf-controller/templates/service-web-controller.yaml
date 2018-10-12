@@ -1,0 +1,18 @@
+{{- if .Values.manifests.service_web_controller }}
+{{- $context := . }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: tf-web-controller
+spec:
+  ports:
+  - name: http
+    port: {{ .Values.service.webui_http_public_port | default 8080 }}
+    targetPort: {{ .Values.global.tf_env.WEBUI_HTTP_LISTEN_PORT | default 8080 }}
+  - name: https
+    port: {{ .Values.service.webui_https_public_port | default 8143 }}
+    targetPort: {{ .Values.global.tf_env.WEBUI_HTTPS_LISTEN_PORT | default 8143 }}
+  selector:
+{{ tuple $context "tungstenfabric" "tf-webui" | include "helm-toolkit.snippets.kubernetes_metadata_labels" | indent 4 }}
+  type: ClusterIP
+{{- end }}

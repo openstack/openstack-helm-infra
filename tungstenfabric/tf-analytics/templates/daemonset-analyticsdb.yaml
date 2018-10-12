@@ -1,0 +1,76 @@
+{{- if .Values.manifests.daemonset_analyticsdb }}
+{{- $_ := set .Values "images" .Values.global.images }}
+{{- $context := . }}
+{{- $dependencies := .Values.dependencies.analyticsdb }}
+
+{{- $serviceAccountName := "analyticsdb" }}
+{{ tuple $context $dependencies $serviceAccountName | include "helm-toolkit.snippets.kubernetes_pod_rbac_serviceaccount" }}
+---
+apiVersion: extensions/v1beta1
+kind: DaemonSet
+metadata:
+  name: tf-analyticsdb
+spec:
+{{ tuple $context "analyticsdb" | include "helm-toolkit.snippets.kubernetes_upgrades_daemonset" | indent 2 }}
+  template:
+    metadata:
+      labels:
+{{ tuple $context "opentf" "tf-analyticsdb" | include "helm-toolkit.snippets.kubernetes_metadata_labels" | indent 8 }}
+      annotations:
+        configmap-hash: {{ tuple "configmap-env.yaml" $context | include "helm-toolkit.utils.hash" }}
+    spec:
+      serviceAccountName: {{ $serviceAccountName }}
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: {{ .Values.labels.analyticsdb.node_selector_key }}
+                operator: In
+                values:
+                - {{ .Values.labels.analyticsdb.node_selector_value }}
+      tolerations:
+      - key: node-role.kubernetes.io/master
+        operator: Exists
+        effect: NoSchedule
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      imagePullSecrets:
+        - name: tf-thirdparty-docker-secret
+      initContainers:
+{{ tuple $context $dependencies nil | include "helm-toolkit.snippets.kubernetes_entrypoint_init_container" | indent 8 }}
+      containers:
+      - name: tf-analyticsdb
+        image: {{ .Values.global.images.tags.cassandra | quote }}
+        imagePullPolicy: {{ default "" .Values.global.images.imagePullPolicy | quote }}
+        env:
+        - name: NODE_TYPE
+          value: database
+        envFrom:
+        - configMapRef:
+            name: tf-analyticsdb
+        - configMapRef:
+            name: tf-thirdparty-env
+        readinessProbe:
+          exec:
+            command: ["/readiness.sh"]
+          initialDelaySeconds: 90
+          periodSeconds: 30
+        livenessProbe:
+          exec:
+            command: ["/liveness.sh"]
+          initialDelaySeconds: 90
+          periodSeconds: 30
+        volumeMounts:
+        - mountPath: /var/lib/cassandra
+          name: analyticsdb-data
+        - mountPath: /etc/tf/ssl
+          name: ssl-dir
+      volumes:
+      - name: analyticsdb-data
+        hostPath:
+          path: /var/lib/analyticsdb
+      - name: ssl-dir
+        hostPath:
+          path: /etc/tf/ssl
+{{- end }}

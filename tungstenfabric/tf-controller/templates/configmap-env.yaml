@@ -1,0 +1,121 @@
+{{- $context := . }}
+{{- $keystone_auth_host := tuple "keystone" "internal" $context | include "helm-toolkit.endpoints.hostname_namespaced_endpoint_lookup" }}
+{{- $rabbitmq_host := tuple "rabbitmq" "internal" $context | include "helm-toolkit.endpoints.hostname_namespaced_endpoint_lookup" }}
+
+{{- $config_nodes := .Values.global.tf_env.CONFIG_NODES | default .Values.global.tf_env.CONTROLLER_NODES }}
+{{- $analytics_nodes := .Values.global.tf_env.ANALYTICS_NODES | default .Values.global.tf_env.CONTROLLER_NODES }}
+{{- $keystone_auth_host := tuple "keystone" "internal" $context | include "helm-toolkit.endpoints.hostname_namespaced_endpoint_lookup" }}
+
+{{- if empty .Values.global.tf_env.RABBITMQ_NODES }}
+{{- set .Values.global.tf_env "RABBITMQ_NODES" $config_nodes }}
+{{- end }}
+
+{{- if empty .Values.global.tf_env.RABBITMQ_ERLANG_COOKIE }}
+{{- set .Values.global.tf_env "RABBITMQ_ERLANG_COOKIE" "abcdefg" }}
+{{- end }}
+
+{{- if empty .Values.global.tf_env.IPFABRIC_SERVICE_HOST -}}
+{{- tuple "nova_metadata" "internal" $context | include "helm-toolkit.endpoints.hostname_namespaced_endpoint_lookup" | set .Values.global.tf_env "IPFABRIC_SERVICE_HOST" | quote | trunc 0 -}}
+{{- end -}}
+
+{{- if empty .Values.global.tf_env.IPFABRIC_SERVICE_PORT }}
+{{- $_ := set .Values.global.tf_env "IPFABRIC_SERVICE_PORT" .Values.endpoints.nova_metadata.port.metadata.public -}}
+{{- end -}}
+
+{{- if empty .Values.global.tf_env.networkManager_ip -}}
+{{- tuple "network" "internal" $context | include "helm-toolkit.endpoints.hostname_namespaced_endpoint_lookup" | set .Values.global.tf_env "networkManager_ip" | quote | trunc 0 -}}
+{{- end -}}
+
+{{- if empty .Values.global.tf_env.networkManager_port -}}
+{{- $_ := set .Values.global.tf_env "networkManager_port" .Values.endpoints.network.port.api.default -}}
+{{- end -}}
+
+{{- if empty .Values.global.tf_env.imageManager_ip -}}
+{{- tuple "image" "internal" $context | include "helm-toolkit.endpoints.hostname_namespaced_endpoint_lookup" | set .Values.global.tf_env "imageManager_ip" | quote | trunc 0 -}}
+{{- end -}}
+
+{{- if empty .Values.global.tf_env.imageManager_port -}}
+{{- $_ := set .Values.global.tf_env "imageManager_port" .Values.endpoints.image.port.api.default -}}
+{{- end -}}
+
+{{- if empty .Values.global.tf_env.computeManager_ip -}}
+{{- tuple "nova" "internal" $context | include "helm-toolkit.endpoints.hostname_namespaced_endpoint_lookup" | set .Values.global.tf_env "computeManager_ip" | quote | trunc 0 -}}
+{{- end -}}
+
+{{- if empty .Values.global.tf_env.computeManager_port -}}
+{{- $_ := set .Values.global.tf_env "computeManager_port" .Values.endpoints.nova.port.api.default -}}
+{{- end -}}
+
+{{- if empty .Values.global.tf_env.storageManager_ip -}}
+{{- tuple "volume" "internal" $context | include "helm-toolkit.endpoints.hostname_namespaced_endpoint_lookup" | set .Values.global.tf_env "storageManager_ip" | quote | trunc 0 -}}
+{{- end -}}
+
+{{- if empty .Values.global.tf_env.storageManager_port -}}
+{{- $_ := set .Values.global.tf_env "storageManager_port" .Values.endpoints.volume.port.api.default -}}
+{{- end -}}
+
+{{- if .Values.manifests.configmap_controller_env }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tf-controller-env
+data:
+  {{- range $key, $value := .Values.global.tf_env }}
+  {{ $key }}: {{ $value | quote }}
+  {{- end }}
+
+{{- end }}
+
+{{- if .Values.manifests.configmap_controller_keystone }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tf-controller-keystone
+data:
+  KEYSTONE_AUTH_ADMIN_USER: {{ .Values.endpoints.keystone.auth.username }}
+  KEYSTONE_AUTH_ADMIN_TENANT: {{ .Values.endpoints.keystone.auth.project_name }}
+  KEYSTONE_AUTH_USER_DOMAIN_NAME: {{ .Values.endpoints.keystone.auth.user_domain_name }}
+  KEYSTONE_AUTH_PROJECT_DOMAIN_NAME: {{ .Values.endpoints.keystone.auth.project_domain_name }}
+  KEYSTONE_AUTH_URL_VERSION: {{ .Values.endpoints.keystone.path.default }}
+  KEYSTONE_AUTH_HOST: {{ $keystone_auth_host }}
+  KEYSTONE_AUTH_PROTO: {{ .Values.endpoints.keystone.scheme.default }}
+  KEYSTONE_AUTH_ADMIN_PORT: {{ .Values.endpoints.keystone.port.admin.default | quote }}
+  KEYSTONE_AUTH_PUBLIC_PORT: {{ .Values.endpoints.keystone.port.api.default | quote }}
+  KEYSTONE_AUTH_REGION_NAME: {{ .Values.endpoints.keystone.auth.region_name | quote }}
+{{- end }}
+
+{{- if .Values.manifests.configmap_configdb }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tf-configdb
+data:
+  # TODO: fix seeds and listen address
+  CASSANDRA_SEEDS: {{ .Values.global.tf_env.CONFIGDB_NODES | default $config_nodes | quote }}
+  CASSANDRA_CLUSTER_NAME: ContrailConfigDB
+  CASSANDRA_START_RPC: "true"
+  CASSANDRA_PORT: {{ .Values.global.tf_env.CONFIGDB_PORT | default 9161 | quote }}
+  CASSANDRA_CQL_PORT: {{ .Values.global.tf_env.CONFIGDB_CQL_PORT | default 9041 | quote }}
+  CASSANDRA_SSL_STORAGE_PORT: {{ .Values.global.tf_env.CONFIGDB_SSL_STORAGE_PORT | default 7011 | quote }}
+  CASSANDRA_STORAGE_PORT: {{ .Values.global.tf_env.CONFIGDB_STORAGE_PORT | default 7010 | quote  }}
+  CASSANDRA_JMX_LOCAL_PORT: {{ .Values.global.tf_env.CONFIGDB_JMX_LOCAL_PORT | default 7200 | quote }}
+{{- end }}
+
+{{- if .Values.manifests.configmap_controller_rabbitmq }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tf-controller-rabbitmq
+data:
+  RABBITMQ_NODES: {{ $rabbitmq_host }}
+  RABBITMQ_NODE_PORT: {{ .Values.endpoints.rabbitmq.port.amqp.default | quote }}
+  RABBITMQ_USER: {{ .Values.endpoints.rabbitmq.auth.username | quote }}
+  RABBITMQ_PASSWORD: {{ .Values.endpoints.rabbitmq.auth.password | quote }}
+  RABBITMQ_USE_SSL: {{ .Values.global.tf_env.RABBITMQ_USE_SSL | default "false" | quote }}
+  RABBITMQ_VHOST: {{ .Values.endpoints.rabbitmq.path | default "/" | quote }}
+{{- end }}
+

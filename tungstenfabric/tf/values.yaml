@@ -1,0 +1,73 @@
+# GLOBAL variables: which can be consumed by all charts
+# images, contrail_env, contrail_env_vrouter_dpdk, contrail_env_vrouter_kernel
+global:
+  # section to configure images for all containers
+  images:
+    tags:
+      kafka: "docker.io/opencontrailnightly/contrail-external-kafka:latest"
+      cassandra: "docker.io/opencontrailnightly/contrail-external-cassandra:latest"
+      redis: "docker.io/opencontrailnightly/contrail-external-redis:latest"
+      zookeeper: "docker.io/opencontrailnightly/contrail-external-zookeeper:latest"
+      contrail_control: "docker.io/opencontrailnightly/contrail-controller-control-control:latest"
+      control_dns: "docker.io/opencontrailnightly/contrail-controller-control-dns:latest"
+      control_named: "docker.io/opencontrailnightly/contrail-controller-control-named:latest"
+      config_api: "docker.io/opencontrailnightly/contrail-controller-config-api:latest"
+      config_devicemgr: "docker.io/opencontrailnightly/contrail-controller-config-devicemgr:latest"
+      config_schema_transformer: "docker.io/opencontrailnightly/contrail-controller-config-schema:latest"
+      config_svcmonitor: "docker.io/opencontrailnightly/contrail-controller-config-svcmonitor:latest"
+      webui_middleware: "docker.io/opencontrailnightly/contrail-controller-webui-job:latest"
+      webui: "docker.io/opencontrailnightly/contrail-controller-webui-web:latest"
+      analytics_api: "docker.io/opencontrailnightly/contrail-analytics-api:latest"
+      contrail_collector: "docker.io/opencontrailnightly/contrail-analytics-collector:latest"
+      analytics_alarm_gen: "docker.io/opencontrailnightly/contrail-analytics-alarm-gen:latest"
+      analytics_query_engine: "docker.io/opencontrailnightly/contrail-analytics-query-engine:latest"
+      analytics_snmp_collector: "docker.io/opencontrailnightly/contrail-analytics-snmp-collector:latest"
+      contrail_topology: "docker.io/opencontrailnightly/contrail-analytics-topology:latest"
+      build_driver_init: "docker.io/opencontrailnightly/contrail-vrouter-kernel-build-init:latest"
+      vrouter_agent: "docker.io/opencontrailnightly/contrail-vrouter-agent:latest"
+      vrouter_init_kernel: "docker.io/opencontrailnightly/contrail-vrouter-kernel-init:latest"
+      vrouter_dpdk: "docker.io/opencontrailnightly/contrail-vrouter-agent-dpdk:latest"
+      vrouter_init_dpdk: "docker.io/opencontrailnightly/contrail-vrouter-kernel-init-dpdk:latest"
+      nodemgr: "docker.io/opencontrailnightly/contrail-nodemgr:latest"
+      contrail_status: "docker.io/opencontrailnightly/contrail-status:latest"
+      node_init: "docker.io/opencontrailnightly/contrail-node-init:latest"
+      dep_check: quay.io/stackanetes/kubernetes-entrypoint:v0.2.1
+    imagePullPolicy: "IfNotPresent"
+    # Specify imageCredentials
+    imageCredentials:
+      # registry: quay.io
+      # username: username
+      # password: password
+
+
+  # contrail_env section for all containers
+  contrail_env:
+    CONTROLLER_NODES: 6.6.6.6
+    LOG_LEVEL: SYS_NOTICE
+    CLOUD_ORCHESTRATOR: openstack
+    AAA_MODE: cloud-admin
+    VROUTER_GATEWAY: 6.6.6.1
+
+  # section of vrouter template for kernel mode
+  contrail_env_vrouter_kernel:
+    AGENT_MODE: kernel
+
+  # section of vrouter template for dpdk mode
+  contrail_env_vrouter_dpdk:
+    AGENT_MODE: dpdk
+    #CPU_CORE_MASK: "0xf"
+    #DPDK_UIO_DRIVER: uio_pci_generic
+    #HUGE_PAGES: 32000
+    #HUGE_PAGES_DIR: /dev/hugepages
+    #DPDK_MEM_PER_SOCKET: 1024
+
+  node:
+    host_os: ubuntu
+
+# Chart level variables like manifests, labels which are local to subchart
+# Can be updated from the parent chart like below
+# Example of overriding values of subchart, where contrail-vrouter is name of the subchart
+contrail-vrouter:
+  manifests:
+    configmap_vrouter_dpdk: false
+    daemonset_dpdk: false

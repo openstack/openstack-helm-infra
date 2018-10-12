@@ -1,0 +1,113 @@
+{{- if .Values.manifests.daemonset_analyticsdb_nodemgr }}
+{{- $_ := set .Values "images" .Values.global.images }}
+{{- $context := . }}
+{{- $dependencies := .Values.dependencies.analyticsdb_nodemgr }}
+
+{{- $serviceAccountName := "analyticsdb-nodemgr" }}
+{{ tuple $context $dependencies $serviceAccountName | include "helm-toolkit.snippets.kubernetes_pod_rbac_serviceaccount" }}
+{{ tuple $context $serviceAccountName | include "helm-toolkit.snippets.kubernetes_pod_rbac_csr_role" }}
+---
+apiVersion: extensions/v1beta1
+kind: DaemonSet
+metadata:
+  name: tf-analyticsdb-nodemgr
+spec:
+{{ tuple $context "analyticsdb_nodemgr" | include "helm-toolkit.snippets.kubernetes_upgrades_daemonset" | indent 2 }}
+  template:
+    metadata:
+      labels:
+{{ tuple $context "opentf" "tf-analyticsdb-nodemgr" | include "helm-toolkit.snippets.kubernetes_metadata_labels" | indent 8 }}
+      annotations:
+        configmap-hash: {{ tuple "configmap-env.yaml" $context | include "helm-toolkit.utils.hash" }}
+    spec:
+      serviceAccountName: {{ $serviceAccountName }}
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: {{ .Values.labels.analyticsdb_nodemgr.node_selector_key }}
+                operator: In
+                values:
+                - {{ .Values.labels.analyticsdb_nodemgr.node_selector_value }}
+      tolerations:
+      - key: node-role.kubernetes.io/master
+        operator: Exists
+        effect: NoSchedule
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      imagePullSecrets:
+        - name: tf-thirdparty-docker-secret
+      initContainers:
+{{ tuple $context $dependencies nil | include "helm-toolkit.snippets.kubernetes_entrypoint_init_container" | indent 8 }}
+        - name: tf-node-init
+          image: {{ .Values.global.images.tags.node_init | quote }}
+          imagePullPolicy: {{ default "" .Values.global.images.imagePullPolicy | quote }}
+          securityContext:
+            privileged: true
+          env:
+          - name: CONTRAIL_STATUS_IMAGE
+            value: {{ .Values.global.images.tags.tf_status | quote }}
+          envFrom:
+          - configMapRef:
+              name: tf-thirdparty-env
+          volumeMounts:
+          - mountPath: /host/usr/bin
+            name: host-usr-bin
+          - mountPath: /etc/tf/ssl
+            name: ssl-dir
+          - mountPath: /etc/sysctl.conf
+            name: host-sysctl-conf
+      containers:
+      - name: tf-analyticsdb-nodemgr
+        image: {{ .Values.global.images.tags.nodemgr | quote }}
+        imagePullPolicy: {{ default "" .Values.global.images.imagePullPolicy | quote }}
+        envFrom:
+        - configMapRef:
+            name: tf-thirdparty-env
+        - configMapRef:
+            name: tf-thirdparty-keystone
+        env:
+        - name: NODE_TYPE
+          value: database
+        - name: DOCKER_HOST
+          value: "unix://mnt/docker.sock"
+        - name: CASSANDRA_CQL_PORT
+          value: {{ .Values.global.tf_env.ANALYTICSDB_CQL_PORT | default 9042 | quote }}
+        - name: CASSANDRA_JMX_LOCAL_PORT
+          value: {{ .Values.global.tf_env.ANALYTICSDB_JMX_LOCAL_PORT | default 7100 | quote }}
+        - name: KEYSTONE_AUTH_ADMIN_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.secrets.keystone.admin }}
+              key: KEYSTONE_AUTH_ADMIN_PASSWORD
+        volumeMounts:
+        - mountPath: /mnt/docker.sock
+          name: docker-unix-socket
+        - mountPath: /var/log/tf/
+          name: tf-log
+        - mountPath: /var/crashes
+          name: var-crashes-database
+        - mountPath: /etc/tf/ssl
+          name: ssl-dir
+      volumes:
+      - name: docker-unix-socket
+        hostPath:
+          path: /var/run/docker.sock
+          type: Socket
+      - name: tf-log
+        hostPath:
+          path: /var/log/tf
+      - name: var-crashes-database
+        hostPath:
+          path: /var/crashes
+      - name: host-usr-bin
+        hostPath:
+          path: {{ .Values.volumeMounts.host_usr_bin.hostPath }}
+      - name: ssl-dir
+        hostPath:
+          path: /etc/tf/ssl
+      - name: host-sysctl-conf
+        hostPath:
+          path: /etc/sysctl.conf
+{{- end }}

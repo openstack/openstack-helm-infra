@@ -1,0 +1,102 @@
+{{- $context := . }}
+{{- $keystone_auth_host := tuple "keystone" "internal" $context | include "helm-toolkit.endpoints.hostname_namespaced_endpoint_lookup" }}
+{{- $rabbitmq_host := tuple "rabbitmq" "internal" $context | include "helm-toolkit.endpoints.hostname_namespaced_endpoint_lookup" }}
+
+{{- $config_nodes := .Values.global.tf_env.CONFIG_NODES | default .Values.global.tf_env.CONTROLLER_NODES }}
+{{- $analytics_nodes := .Values.global.tf_env.ANALYTICS_NODES | default .Values.global.tf_env.CONTROLLER_NODES }}
+{{- $keystone_auth_host := tuple "keystone" "internal" $context | include "helm-toolkit.endpoints.hostname_namespaced_endpoint_lookup" }}
+
+{{- if empty .Values.global.tf_env.RABBITMQ_NODES }}
+{{- set .Values.global.tf_env "RABBITMQ_NODES" $config_nodes }}
+{{- end }}
+
+{{- if empty .Values.global.tf_env.RABBITMQ_ERLANG_COOKIE }}
+{{- set .Values.global.tf_env "RABBITMQ_ERLANG_COOKIE" "abcdefg" }}
+{{- end }}
+
+{{- if .Values.manifests.configmap_analytics_env }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tf-analytics-env
+data:
+  {{- range $key, $value := .Values.global.tf_env }}
+  {{ $key }}: {{ $value | quote }}
+  {{- end }}
+{{- end }}
+
+{{- if .Values.manifests.configmap_analytics_keystone }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tf-analytics-keystone
+data:
+  KEYSTONE_AUTH_ADMIN_USER: {{ .Values.endpoints.keystone.auth.username }}
+  KEYSTONE_AUTH_ADMIN_TENANT: {{ .Values.endpoints.keystone.auth.project_name }}
+  KEYSTONE_AUTH_USER_DOMAIN_NAME: {{ .Values.endpoints.keystone.auth.user_domain_name }}
+  KEYSTONE_AUTH_PROJECT_DOMAIN_NAME: {{ .Values.endpoints.keystone.auth.project_domain_name }}
+  KEYSTONE_AUTH_URL_VERSION: {{ .Values.endpoints.keystone.path.default }}
+  KEYSTONE_AUTH_HOST: {{ $keystone_auth_host }}
+  KEYSTONE_AUTH_PROTO: {{ .Values.endpoints.keystone.scheme.default }}
+  KEYSTONE_AUTH_ADMIN_PORT: {{ .Values.endpoints.keystone.port.admin.default | quote }}
+  KEYSTONE_AUTH_PUBLIC_PORT: {{ .Values.endpoints.keystone.port.api.default | quote }}
+  KEYSTONE_AUTH_REGION_NAME: {{ .Values.endpoints.keystone.auth.region_name | quote }}
+{{- end }}
+
+{{- if .Values.manifests.configmap_analytics_rabbitmq }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tf-analytics-rabbitmq
+data:
+  RABBITMQ_NODES: {{ $rabbitmq_host }}
+  RABBITMQ_NODE_PORT: {{ .Values.endpoints.rabbitmq.port.amqp.default | quote }}
+  RABBITMQ_USER: {{ .Values.endpoints.rabbitmq.auth.username | quote }}
+  RABBITMQ_PASSWORD: {{ .Values.endpoints.rabbitmq.auth.password | quote }}
+  RABBITMQ_USE_SSL: {{ .Values.global.tf_env.RABBITMQ_USE_SSL | default "false" | quote }}
+  RABBITMQ_VHOST: {{ .Values.endpoints.rabbitmq.path | default "/" | quote }}
+{{- end }}
+
+{{- if .Values.manifests.configmap_analytics_zookeeper }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tf-analytics-zookeeper
+data:
+  ZOOKEEPER_PORT: {{ .Values.global.tf_env.ZOOKEEPER_ANALYTICS_PORT | default 2182 | quote }}
+  ZOOKEEPER_PORTS: "4888:5888"
+  ZOOKEEPER_NODES: {{ .Values.global.tf_env.ZOOKEEPER_ANALYTICS_NODES | default .Values.global.tf_env.ANALYTICSDB_NODES | default $analytics_nodes | quote }}
+{{- end }}
+
+{{- if .Values.manifests.configmap_config_zookeeper }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tf-config-zookeeper
+data:
+  ZOOKEEPER_PORT: {{ .Values.global.tf_env.ZOOKEEPER_PORT | default 2181 | quote }}
+  ZOOKEEPER_PORTS: "2888:3888"
+  ZOOKEEPER_NODES: {{ .Values.global.tf_env.ZOOKEEPER_NODES | default .Values.global.tf_env.CONFIGDB_NODES | default $config_nodes | quote }}
+{{- end }}
+
+{{- if .Values.manifests.configmap_analyticsdb }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tf-analyticsdb
+data:
+  CASSANDRA_SEEDS: {{ .Values.global.tf_env.ANALYTICSDB_NODES | default $analytics_nodes | quote  }}
+  CASSANDRA_CLUSTER_NAME: ContrailAnalyticsDB
+  CASSANDRA_START_RPC: "true"
+  CASSANDRA_PORT: {{ .Values.global.tf_env.ANALYTICSDB_PORT | default 9160 | quote }}
+  CASSANDRA_CQL_PORT: {{ .Values.global.tf_env.ANALYTICSDB_CQL_PORT | default 9042 | quote }}
+  CASSANDRA_SSL_STORAGE_PORT: {{ .Values.global.tf_env.ANALYTICSDB_SSL_STORAGE_PORT | default 7001 | quote }}
+  CASSANDRA_STORAGE_PORT: {{ .Values.global.tf_env.ANALYTICSDB_STORAGE_PORT | default 7000 | quote  }}
+  CASSANDRA_JMX_LOCAL_PORT: {{ .Values.global.tf_env.ANALYTICSDB_JMX_LOCAL_PORT | default 7100 | quote }}
+{{- end }}

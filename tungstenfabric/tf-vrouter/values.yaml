@@ -1,0 +1,141 @@
+global:
+  images:
+    tags:
+      nodemgr: "docker.io/tungstenfabricnightly/tf-nodemgr:latest"
+      contrail_status: "docker.io/tungstenfabricnightly/tf-status:latest"
+      node_init: "docker.io/tungstenfabricnightly/tf-node-init:latest"
+      build_driver_init: "docker.io/tungstenfabricnightly/tf-vrouter-kernel-build-init:latest"
+      vrouter_agent: "docker.io/tungstenfabricnightly/tf-vrouter-agent:latest"
+      vrouter_init_kernel: "docker.io/tungstenfabricnightly/tf-vrouter-kernel-init:latest"
+      vrouter_plugin_mellanox_init: "docker.io/tungstenfabricnightly/tf-vrouter-plugin-mellanox-init-ubuntu:latest"
+      vrouter_dpdk: "docker.io/tungstenfabricnightly/tf-vrouter-agent-dpdk:latest"
+      vrouter_init_dpdk: "docker.io/tungstenfabricnightly/tf-vrouter-kernel-init-dpdk:latest"
+      dep_check: quay.io/stackanetes/kubernetes-entrypoint:v0.2.1
+    imagePullPolicy: "IfNotPresent"
+    # Specify imageCredentials
+    imageCredentials:
+      # registry: quay.io
+      # username: username
+      # password: password
+
+  # common section for all vrouter variants
+  # this section is commonized with other Contrails' services
+  tf_env:
+    CONTROLLER_NODES: 10.87.65.248
+    LOG_LEVEL: SYS_NOTICE
+    CLOUD_ORCHESTRATOR: openstack
+    AAA_MODE: cloud-admin
+    # this value should be the same as nova/conf.nova.neutron.metadata_proxy_shared_secret
+    METADATA_PROXY_SECRET: password
+    #VROUTER_GATEWAY: 8.0.0.254
+
+  # section of vrouter template for kernel mode
+  tf_env_vrouter_kernel:
+    AGENT_MODE: kernel
+
+
+  # section of vrouter template for dpdk mode
+  tf_env_vrouter_dpdk:
+    AGENT_MODE: dpdk
+
+  tf_env_vrouter_sriov:
+    SRIOV: true
+    #per_compute_info:
+    #  - node_name: k8snode1
+    #    SRIOV_VF:  10
+    #    SRIOV_PHYSICAL_INTERFACE: enp129s0f1
+    #    SRIOV_PHYS_NET:  physnet1
+
+  node:
+    host_os: ubuntu
+
+labels:
+  vrouter_agent_kernel:
+    node_selector_key: "tungstenfabric.org/vrouter-kernel"
+    node_selector_value: "enabled"
+  vrouter_agent_dpdk:
+    node_selector_key: "tungstenfabric.org/vrouter-dpdk"
+    node_selector_value: "enabled"
+  vrouter_agent_sriov:
+    node_selector_key: "vrouter-sriov"
+    node_selector_value: "enabled"
+
+dependencies:
+  vrouter_agent_kernel:
+    daemonset:
+    - tf-config
+    - tf-control
+  vrouter_agent_dpdk:
+    daemonset:
+    - tf-config
+    - tf-control
+  vrouter_agent_sriov:
+    daemonset:
+    - tf-config
+    - tf-control
+
+# Names of secrets used by bootstrap and environmental checks
+secrets:
+  keystone:
+    admin: tf-vrouter-keystone-admin
+
+# typically overriden by environmental
+# values, but should include all endpoints
+# required by this chart
+endpoints:
+  cluster_domain_suffix: cluster.local
+  keystone:
+    auth:
+      username: admin
+      password: password
+      project_name: admin
+      user_domain_name: default
+      project_domain_name: default
+      region_name: RegionOne
+    hosts:
+      default: keystone-api
+    path:
+      default: /v3
+    port:
+      admin:
+        default: 35357
+      api:
+        default: 80
+    scheme:
+      default: http
+    host_fqdn_override:
+       default: null
+    namespace: openstack
+
+pod:
+  lifecycle:
+    upgrades:
+      daemonsets:
+        pod_replacement_strategy: RollingUpdate
+        vrouter_agent_kernel:
+          enabled: true
+          min_ready_seconds: 0
+          max_unavailable: 1
+        vrouter_agent_dpdk:
+          enabled: true
+          min_ready_seconds: 0
+          max_unavailable: 1
+        vrouter_agent_sriov:
+          enabled: true
+          min_ready_seconds: 0
+          max_unavailable: 1
+
+# VolumeMounts related inputs are defined here
+volumeMounts:
+  host_usr_bin:
+    hostPath: '/usr/bin'
+
+manifests:
+  configmap_vrouter_kernel: true
+  configmap_vrouter_keystone: true
+  configmap_vrouter_dpdk: false
+  configmap_vrouter_sriov: false
+  daemonset_kernel: true
+  daemonset_dpdk: false
+  daemonset_vrouter_sriov: false
+  secret_vrouter_keystone_admin: true

@@ -1,0 +1,79 @@
+{{- if .Values.manifests.daemonset_config_zookeeper }}
+{{- $_ := set .Values "images" .Values.global.images }}
+{{- $context := . }}
+{{- $dependencies := .Values.dependencies.config_zookeeper }}
+
+{{- $serviceAccountName := "config-zookeeper" }}
+{{ tuple $context $dependencies $serviceAccountName | include "helm-toolkit.snippets.kubernetes_pod_rbac_serviceaccount" }}
+---
+apiVersion: extensions/v1beta1
+kind: DaemonSet
+metadata:
+  name: tf-config-zookeeper
+spec:
+{{ tuple $context "config_zookeeper" | include "helm-toolkit.snippets.kubernetes_upgrades_daemonset" | indent 2 }}
+  template:
+    metadata:
+      labels:
+{{ tuple $context "tungstenfabric" "config-zookeeper" | include "helm-toolkit.snippets.kubernetes_metadata_labels" | indent 8 }}
+      annotations:
+        configmap-hash: {{ tuple "configmap-env.yaml" $context | include "helm-toolkit.utils.hash" }}
+    spec:
+      serviceAccountName: {{ $serviceAccountName }}
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: {{ .Values.labels.config_zookeeper.node_selector_key }}
+                operator: In
+                values:
+                - {{ .Values.labels.config_zookeeper.node_selector_value }}
+      tolerations:
+      - key: node-role.kubernetes.io/master
+        operator: Exists
+        effect: NoSchedule
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      imagePullSecrets:
+        - name: tf-thirdparty-docker-secret
+      initContainers:
+{{ tuple $context $dependencies nil | include "helm-toolkit.snippets.kubernetes_entrypoint_init_container" | indent 8 }}
+      containers:
+      - name: zookeeper
+        image: {{ .Values.global.images.tags.zookeeper | quote }}
+        imagePullPolicy: {{ default "" .Values.global.images.imagePullPolicy | quote }}
+        env:
+        - name: NODE_TYPE
+          value: config-database
+        envFrom:
+        - configMapRef:
+            name: tf-config-zookeeper
+        readinessProbe:
+          exec:
+            command: ["/readiness.sh"]
+          initialDelaySeconds: 10
+          periodSeconds: 5
+        livenessProbe:
+          exec:
+            command: ["/liveness.sh"]
+          initialDelaySeconds: 10
+          periodSeconds: 5
+        volumeMounts:
+        - mountPath: /data
+          name: config-zookeeper-data
+        - mountPath: /datalog
+          name: config-zookeeper-datalog
+        - mountPath: /etc/contrail/ssl
+          name: ssl-dir
+      volumes:
+      - name: config-zookeeper-data
+        hostPath:
+          path: /var/lib/config_zookeeper_data
+      - name: config-zookeeper-datalog
+        hostPath:
+          path: /var/lib/config_zookeeper_datalog
+      - name: ssl-dir
+        hostPath:
+          path: /etc/contrail/ssl
+{{- end }}

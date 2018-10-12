@@ -1,0 +1,44 @@
+{{- if .Values.manifests.ingress_webui }}
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  annotations:
+    kubernetes.io/ingress.class: nginx-cluster
+    nginx.ingress.kubernetes.io/proxy-body-size: "0"
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    # tls will be terminated at the pod
+    nginx.ingress.kubernetes.io/ssl-passthrough: "true"
+    # session affinity related annotations
+    nginx.ingress.kubernetes.io/affinity: cookie
+    nginx.ingress.kubernetes.io/session-cookie-hash: sha1
+    nginx.ingress.kubernetes.io/session-cookie-name: route
+  name: tf-webui
+spec:
+  tls:
+  - hosts:
+    - {{ .Values.ingress.webui_host }}.contrail.svc.cluster.local
+    - {{ .Values.ingress.webui_host }}.contrail
+    - {{ .Values.ingress.webui_host }}
+  rules:
+  - host: {{ .Values.ingress.webui_host }}
+    http:
+      paths:
+      - backend:
+          serviceName: tf-web-controller
+          servicePort: https
+        path: /
+  - host: {{ .Values.ingress.webui_host }}.{{ .Release.Namespace }}
+    http:
+      paths:
+      - backend:
+          serviceName: tf-web-controller
+          servicePort: https
+        path: /
+  - host: {{ .Values.ingress.webui_host }}.{{ .Release.Namespace }}.svc.cluster.local
+    http:
+      paths:
+      - backend:
+          serviceName: tf-web-controller
+          servicePort: https
+        path: /
+{{- end }}

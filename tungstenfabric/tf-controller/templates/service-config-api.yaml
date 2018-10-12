@@ -1,0 +1,18 @@
+{{- if .Values.manifests.service_config_api_server }}
+{{- $context := . }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: config-api-server
+spec:
+  ports:
+  - name: api
+    port: {{ .Values.service.config_api_public_port | default 8082 }}
+    targetPort: {{ .Values.global.tf_env.CONFIG_API_PORT | default 8082 }}
+  - name: introspect
+    port: {{ .Values.service.config_introspect_public_port | default 8084 }}
+    targetPort: {{ .Values.global.tf_env.CONFIG_API_INTROSPECT_PORT | default 8084 }}
+  selector:
+{{ tuple $context "tungstenfabric" "tf-config" | include "helm-toolkit.snippets.kubernetes_metadata_labels" | indent 4 }}
+  type: ClusterIP
+{{- end }}

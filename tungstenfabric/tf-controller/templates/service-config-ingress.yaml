@@ -1,0 +1,15 @@
+{{- if .Values.manifests.service_config_ingress }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: tf-config-api
+spec:
+  ports:
+  - name: http
+    port: 80
+    protocol: TCP
+    targetPort: 80
+  selector:
+    app: ingress-api
+  type: ClusterIP
+{{- end }}

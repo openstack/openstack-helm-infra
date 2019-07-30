@@ -15,7 +15,7 @@
 #    under the License.
 set -xe
 
-CFSSLURL=https://pkg.cfssl.org/R1.2
+CFSSLURL=https://pkg.cfssl.org
 for CFSSL_BIN in cfssl cfssljson; do
   if ! type -p "${CFSSL_BIN}"; then
     sudo curl -sSL -o "/usr/local/bin/${CFSSL_BIN}" "${CFSSLURL}/${CFSSL_BIN}_linux-amd64"

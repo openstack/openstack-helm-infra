@@ -59,7 +59,7 @@ function configure_resolvconf {
 }
 
 # NOTE: Clean Up hosts file
-sudo sed -i '/^127.0.0.1/c\127.0.0.1 localhost localhost.localdomain localhost4localhost4.localdomain4' /etc/hosts
+sudo sed -i '/^127.0.0.1/c\127.0.0.1 localhost localhost.localdomain localhost4 localhost4.localdomain4' /etc/hosts
 sudo sed -i '/^::1/c\::1 localhost6 localhost6.localdomain6' /etc/hosts
 
 # Install required packages for K8s on host

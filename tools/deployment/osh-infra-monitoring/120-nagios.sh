@@ -19,9 +19,13 @@ set -xe
 #NOTE: Lint and package chart
 make nagios
 
+: ${OSH_INFRA_EXTRA_HELM_ARGS_NAGIOS:="$(./tools/deployment/common/get-values-overrides.sh nagios)"}
+
 #NOTE: Deploy command
 helm upgrade --install nagios ./nagios \
-    --namespace=osh-infra
+  --namespace=osh-infra \
+  ${OSH_INFRA_EXTRA_HELM_ARGS} \
+  ${OSH_INFRA_EXTRA_HELM_ARGS_NAGIOS}
 
 #NOTE: Wait for deploy
 ./tools/deployment/common/wait-for-pods.sh osh-infra

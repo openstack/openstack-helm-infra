@@ -66,6 +66,7 @@
         - ./tools/deployment/multinode/130-fluentd-daemonset.sh
         - ./tools/deployment/multinode/135-fluentd-deployment.sh
         - ./tools/deployment/multinode/140-kibana.sh
+        - ./tools/deployment/multinode/160-zookeeper.sh
         - ./tools/deployment/multinode/600-grafana-selenium.sh || true
         - ./tools/deployment/multinode/610-nagios-selenium.sh || true
         - ./tools/deployment/multinode/620-prometheus-selenium.sh || true
@@ -130,12 +131,31 @@
         - ./tools/deployment/osh-infra-logging/030-radosgw-osh-infra.sh
         - ./tools/deployment/osh-infra-logging/040-ldap.sh
         - ./tools/deployment/osh-infra-logging/050-elasticsearch.sh
-        - ./tools/deployment/osh-infra-logging/055-elasticsearch-ldap.sh
         - ./tools/deployment/osh-infra-logging/060-fluentbit.sh
         - ./tools/deployment/osh-infra-logging/065-fluentd-daemonset.sh
         - ./tools/deployment/osh-infra-logging/070-fluentd-deployment.sh
         - ./tools/deployment/osh-infra-logging/075-kibana.sh
         - ./tools/deployment/osh-infra-logging/600-kibana-selenium.sh || true
+
+- job:
+    name: openstack-helm-infra-kafka
+    parent: openstack-helm-infra-functional
+    timeout: 7200
+    pre-run:
+      - playbooks/osh-infra-upgrade-host.yaml
+    run: playbooks/osh-infra-gate-runner.yaml
+    post-run: playbooks/osh-infra-collect-logs.yaml
+    nodeset: openstack-helm-single-node
+    vars:
+      gate_scripts:
+        - ./tools/deployment/osh-infra-kafka/000-install-packages.sh
+        - ./tools/deployment/osh-infra-kafka/005-deploy-k8s.sh
+        - ./tools/deployment/osh-infra-kafka/010-ingress.sh
+        - ./tools/deployment/osh-infra-kafka/020-ceph.sh
+        - ./tools/deployment/osh-infra-kafka/025-ceph-ns-activate.sh
+        - ./tools/deployment/osh-infra-kafka/030-radosgw-osh-infra.sh
+        - ./tools/deployment/osh-infra-kafka/040-zookeeper.sh
+        - ./tools/deployment/osh-infra-kafka/050-kafka.sh
 
 - job:
     name: openstack-helm-infra-aio-monitoring
@@ -168,6 +188,31 @@
         - ./tools/deployment/osh-infra-monitoring/600-grafana-selenium.sh || true
         - ./tools/deployment/osh-infra-monitoring/610-prometheus-selenium.sh || true
         - ./tools/deployment/osh-infra-monitoring/620-nagios-selenium.sh || true
+
+- job:
+    name: openstack-helm-infra-federated-monitoring
+    parent: openstack-helm-infra-functional
+    timeout: 7200
+    pre-run:
+      - playbooks/osh-infra-upgrade-host.yaml
+      - playbooks/osh-infra-deploy-selenium.yaml
+    run: playbooks/osh-infra-gate-runner.yaml
+    post-run: playbooks/osh-infra-collect-logs.yaml
+    nodeset: openstack-helm-single-node
+    vars:
+      gate_scripts:
+        - ./tools/deployment/federated-monitoring/000-install-packages.sh
+        - ./tools/deployment/federated-monitoring/005-deploy-k8s.sh
+        - ./tools/deployment/federated-monitoring/010-ingress.sh
+        - ./tools/deployment/federated-monitoring/020-nfs-provisioner.sh
+        - ./tools/deployment/federated-monitoring/030-ldap.sh
+        - ./tools/deployment/federated-monitoring/040-kube-state-metrics.sh
+        - ./tools/deployment/federated-monitoring/050-node-exporter.sh
+        - ./tools/deployment/federated-monitoring/060-prometheus.sh
+        - ./tools/deployment/federated-monitoring/070-federated-prometheus.sh
+        - ./tools/deployment/federated-monitoring/080-mariadb.sh
+        - ./tools/deployment/federated-monitoring/090-grafana.sh
+        - ./tools/deployment/federated-monitoring/100-prometheus-selenium.sh || true
 
 - job:
     name: openstack-helm-infra-aio-network-policy
@@ -254,6 +299,7 @@
         - ./tools/deployment/openstack-support/090-keystone.sh
         - ./tools/deployment/openstack-support/100-ceph-radosgateway.sh
         - ./tools/deployment/openstack-support/110-openstack-exporter.sh
+        - ./tools/deployment/openstack-support/120-powerdns.sh
 
 - job:
     name: openstack-helm-infra-five-ubuntu

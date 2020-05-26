@@ -20,7 +20,7 @@
 images:
   tags:
     alertmanager: docker.io/prom/alertmanager:v0.11.0
-    dep_check: quay.io/stackanetes/kubernetes-entrypoint:v0.3.1
+    dep_check: quay.io/airshipit/kubernetes-entrypoint:v1.0.0
     image_repo_sync: docker.io/docker:17.07.0
   pull_policy: IfNotPresent
   local_registry:
@@ -65,11 +65,8 @@ pod:
     alertmanager: 1
   lifecycle:
     upgrades:
-      revision_history: 3
-      pod_replacement_strategy: RollingUpdate
-      rolling_update:
-        max_unavailable: 1
-        max_surge: 3
+      statefulsets:
+        pod_replacement_strategy: RollingUpdate
     termination_grace_period:
       alertmanager:
         timeout: 30
@@ -188,6 +185,13 @@ manifests:
   service_discovery: true
   service_ingress: true
   statefulset: true
+
+network_policy:
+  alertmanager:
+    ingress:
+      - {}
+    egress:
+      - {}
 
 conf:
   command_flags:

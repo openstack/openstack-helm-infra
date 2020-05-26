@@ -37,7 +37,7 @@ images:
     prometheus_rabbitmq_exporter_helm_tests: docker.io/openstackhelm/heat:ocata-ubuntu_xenial
     rabbitmq_init: docker.io/openstackhelm/heat:ocata-ubuntu_xenial
     rabbitmq: docker.io/rabbitmq:3.7.13
-    dep_check: quay.io/stackanetes/kubernetes-entrypoint:v0.3.1
+    dep_check: quay.io/airshipit/kubernetes-entrypoint:v1.0.0
     scripted_test: docker.io/rabbitmq:3.7.13-management
     image_repo_sync: docker.io/docker:17.07.0
   pull_policy: "IfNotPresent"
@@ -226,8 +226,6 @@ network:
         cluster: "nginx-cluster"
       annotations:
         nginx.ingress.kubernetes.io/rewrite-target: /
-  prometheus_rabbitmq_exporter:
-    port: 9095
 
 # typically overridden by environmental
 # values, but should include all endpoints
@@ -319,6 +317,11 @@ endpoints:
         protocol: UDP
 
 network_policy:
+  prometheus_rabbitmq_exporter:
+    ingress:
+      - {}
+    egress:
+      - {}
   rabbitmq:
     ingress:
       - {}
@@ -346,6 +349,7 @@ manifests:
       configmap_bin: true
       deployment_exporter: true
       service_exporter: true
+      network_policy_exporter: false
   network_policy: false
   secret_erlang_cookie: true
   secret_admin_user: true

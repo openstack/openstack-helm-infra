@@ -19,9 +19,14 @@ set -xe
 #NOTE: Lint and package chart
 make grafana
 
+FEATURE_GATES="calico,ceph,containers,coredns,elasticsearch,kubernetes,nginx,nodes,openstack,prometheus"
+: ${OSH_INFRA_EXTRA_HELM_ARGS_GRAFANA:="$({ ./tools/deployment/common/get-values-overrides.sh grafana;} 2> /dev/null)"}
+
 #NOTE: Deploy command
 helm upgrade --install grafana ./grafana \
-    --namespace=osh-infra
+  --namespace=osh-infra \
+  ${OSH_INFRA_EXTRA_HELM_ARGS} \
+  ${OSH_INFRA_EXTRA_HELM_ARGS_GRAFANA}
 
 #NOTE: Wait for deploy
 ./tools/deployment/common/wait-for-pods.sh osh-infra

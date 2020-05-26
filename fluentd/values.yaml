@@ -31,9 +31,9 @@ labels:
 
 images:
   tags:
-    fluentd: docker.io/openstackhelm/fluentd:latest-debian
+    fluentd: docker.io/openstackhelm/fluentd:debian-20190903
     prometheus_fluentd_exporter: docker.io/bitnami/fluentd-exporter:0.2.0
-    dep_check: quay.io/stackanetes/kubernetes-entrypoint:v0.3.1
+    dep_check: quay.io/airshipit/kubernetes-entrypoint:v1.0.0
     helm_tests: docker.io/openstackhelm/heat:newton-ubuntu_xenial
     elasticsearch_template: docker.io/openstackhelm/heat:newton-ubuntu_xenial
     image_repo_sync: docker.io/docker:17.07.0
@@ -366,6 +366,7 @@ endpoints:
     port:
       broker:
         default: 9092
+        public: 80
   prometheus_fluentd_exporter:
     namespace: null
     hosts:
@@ -406,7 +407,9 @@ network_policy:
 
 pod:
   env:
-    fluentd: null
+    fluentd:
+      vars: null
+      secrets: null
   tolerations:
     fluentd:
       enabled: false
@@ -488,5 +491,6 @@ manifests:
       service_exporter: true
   network_policy: false
   secret_elasticsearch: true
+  secret_fluentd_env: true
   secret_kafka: false
   service_fluentd: true

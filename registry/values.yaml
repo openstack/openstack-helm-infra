@@ -32,7 +32,7 @@ images:
     registry: docker.io/registry:2
     registry_proxy: gcr.io/google_containers/kube-registry-proxy:0.4
     bootstrap: docker.io/docker:17.07.0
-    dep_check: quay.io/stackanetes/kubernetes-entrypoint:v0.3.1
+    dep_check: quay.io/airshipit/kubernetes-entrypoint:v1.0.0
   pull_policy: "IfNotPresent"
   local_registry:
     active: false
@@ -139,13 +139,19 @@ bootstrap:
   script:
     docker info
   preload_images:
-    - quay.io/stackanetes/kubernetes-entrypoint:v0.3.1
+    - quay.io/airshipit/kubernetes-entrypoint:v1.0.0
 
 dependencies:
   static:
     bootstrap:
-      daemonset:
-        - docker-registry-proxy
+      pod:
+        # NOTE(srwilkers): As the daemonset dependency is currently broken for
+        # kubernetes 1.16, use the pod dependency and require the same node
+        # instead for the same result
+        - requireSameNode: true
+          labels:
+            application: docker
+            component: registry-proxy
       services:
         - endpoint: internal
           service: docker_registry

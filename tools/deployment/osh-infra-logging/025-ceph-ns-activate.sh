@@ -41,6 +41,9 @@ conf:
   rgw_ks:
     enabled: false
 EOF
+
+: ${OSH_EXTRA_HELM_ARGS_CEPH_NS_ACTIVATE:="$(./tools/deployment/common/get-values-overrides.sh ceph-provisioners)"}
+
 helm upgrade --install ceph-osh-infra-config ./ceph-provisioners \
   --namespace=osh-infra \
   --values=/tmp/ceph-osh-infra-config.yaml \
@@ -53,6 +56,6 @@ helm upgrade --install ceph-osh-infra-config ./ceph-provisioners \
 helm test ceph-osh-infra-config --timeout 600
 
 #NOTE: Validate Deployment info
-kubectl get -n osh-infra jobs --show-all
+kubectl get -n osh-infra jobs
 kubectl get -n osh-infra secrets
 kubectl get -n osh-infra configmaps

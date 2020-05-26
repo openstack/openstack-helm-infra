@@ -41,11 +41,14 @@ conf:
   rgw_ks:
     enabled: false
 EOF
+
+: ${OSH_INFRA_EXTRA_HELM_ARGS_CEPH_NS_ACTIVATE:="$(./tools/deployment/common/get-values-overrides.sh ceph-provisioners)"}
+
 helm upgrade --install ceph-openstack-config ./ceph-provisioners \
   --namespace=openstack \
   --values=/tmp/ceph-openstack-config.yaml \
-  ${OSH_EXTRA_HELM_ARGS} \
-  ${OSH_EXTRA_HELM_ARGS_CEPH_NS_ACTIVATE}
+  ${OSH_INFRA_EXTRA_HELM_ARGS} \
+  ${OSH_INFRA_EXTRA_HELM_ARGS_CEPH_NS_ACTIVATE}
 
 #NOTE: Wait for deploy
 ./tools/deployment/common/wait-for-pods.sh openstack
@@ -53,6 +56,6 @@ helm upgrade --install ceph-openstack-config ./ceph-provisioners \
 helm test ceph-openstack-config --timeout 600
 
 #NOTE: Validate Deployment info
-kubectl get -n openstack jobs --show-all
+kubectl get -n openstack jobs
 kubectl get -n openstack secrets
 kubectl get -n openstack configmaps

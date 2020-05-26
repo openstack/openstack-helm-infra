@@ -18,9 +18,9 @@
 set -xe
 
 : ${HELM_VERSION:="v2.14.1"}
-: ${KUBE_VERSION:="v1.13.4"}
-: ${MINIKUBE_VERSION:="v0.30.0"}
-: ${CALICO_VERSION:="v3.3"}
+: ${KUBE_VERSION:="v1.16.2"}
+: ${MINIKUBE_VERSION:="v1.3.1"}
+: ${CALICO_VERSION:="v3.9"}
 
 : "${HTTP_PROXY:=""}"
 : "${HTTPS_PROXY:=""}"
@@ -33,7 +33,11 @@ function configure_resolvconf {
   # kubelet to resolve cluster services.
   sudo mv /etc/resolv.conf /etc/resolv.conf.backup
 
-  sudo bash -c "echo 'search svc.cluster.local cluster.local' > /etc/resolv.conf"
+  # Create symbolic link to the resolv.conf file managed by systemd-resolved, as
+  # the kubelet.resolv-conf extra-config flag is automatically executed by the
+  # minikube start command, regardless of being passed in here
+  sudo ln -s /run/systemd/resolve/resolv.conf /etc/resolv.conf
+
   sudo bash -c "echo 'nameserver 10.96.0.10' >> /etc/resolv.conf"
 
   # NOTE(drewwalters96): Use the Google DNS servers to prevent local addresses in
@@ -48,7 +52,9 @@ function configure_resolvconf {
     done
   fi
 
+  sudo bash -c "echo 'search svc.cluster.local cluster.local' >> /etc/resolv.conf"
   sudo bash -c "echo 'options ndots:5 timeout:1 attempts:1' >> /etc/resolv.conf"
+
   sudo rm /etc/resolv.conf.backup
 }
 
@@ -105,25 +111,22 @@ rm -rf "${TMP_DIR}"
 
 # NOTE: Deploy kubenetes using minikube. A CNI that supports network policy is
 # required for validation; use calico for simplicity.
-sudo -E minikube config set embed-certs true
 sudo -E minikube config set kubernetes-version "${KUBE_VERSION}"
 sudo -E minikube config set vm-driver none
-sudo -E minikube addons disable addon-manager
-sudo -E minikube addons disable dashboard
+sudo -E minikube config set embed-certs true
 
 export CHANGE_MINIKUBE_NONE_USER=true
+export MINIKUBE_IN_STYLE=false
 sudo -E minikube start \
   --docker-env HTTP_PROXY="${HTTP_PROXY}" \
   --docker-env HTTPS_PROXY="${HTTPS_PROXY}" \
   --docker-env NO_PROXY="${NO_PROXY},10.96.0.0/12" \
-  --extra-config=kubelet.network-plugin=cni \
+  --network-plugin=cni \
   --extra-config=controller-manager.allocate-node-cidrs=true \
   --extra-config=controller-manager.cluster-cidr=192.168.0.0/16
 
-kubectl apply -f \
-  https://docs.projectcalico.org/"${CALICO_VERSION}"/getting-started/kubernetes/installation/hosted/rbac-kdd.yaml
-kubectl apply -f \
-  https://docs.projectcalico.org/"${CALICO_VERSION}"/getting-started/kubernetes/installation/hosted/kubernetes-datastore/calico-networking/1.7/calico.yaml
+curl https://docs.projectcalico.org/"${CALICO_VERSION}"/manifests/calico.yaml -o /tmp/calico.yaml
+kubectl apply -f /tmp/calico.yaml
 
 # Note: Patch calico daemonset to enable Prometheus metrics and annotations
 tee /tmp/calico-node.yaml << EOF
@@ -143,9 +146,6 @@ spec:
               value: "9091"
 EOF
 kubectl patch daemonset calico-node -n kube-system --patch "$(cat /tmp/calico-node.yaml)"
-
-# NOTE: Wait for node to be ready.
-kubectl wait --timeout=240s --for=condition=Ready nodes/minikube
 
 # NOTE: Wait for dns to be running.
 END=$(($(date +%s) + 240))
@@ -175,26 +175,35 @@ subjects:
     namespace: kube-system
 EOF
 
-helm init --service-account helm-tiller
+# NOTE(srwilkers): Required due to tiller deployment spec using extensions/v1beta1
+# which has been removed in Kubernetes 1.16.0.
+# See: https://github.com/helm/helm/issues/6374
+helm init --service-account helm-tiller --output yaml \
+  | sed 's@apiVersion: extensions/v1beta1@apiVersion: apps/v1@' \
+  | sed 's@  replicas: 1@  replicas: 1\n  selector: {"matchLabels": {"app": "helm", "name": "tiller"}}@' \
+  | kubectl apply -f -
+
+  # Patch tiller-deploy service to expose metrics port
+  tee /tmp/tiller-deploy.yaml << EOF
+  metadata:
+    annotations:
+      prometheus.io/scrape: "true"
+      prometheus.io/port: "44135"
+  spec:
+    ports:
+    - name: http
+      port: 44135
+      targetPort: http
+  EOF
+  kubectl patch service tiller-deploy -n kube-system --patch "$(cat /tmp/tiller-deploy.yaml)"
 
 kubectl --namespace=kube-system wait \
   --timeout=240s \
   --for=condition=Ready \
   pod -l app=helm,name=tiller
-
-# Patch tiller-deploy service to expose metrics port
-tee /tmp/tiller-deploy.yaml << EOF
-metadata:
-  annotations:
-    prometheus.io/scrape: "true"
-    prometheus.io/port: "44135"
-spec:
-  ports:
-  - name: http
-    port: 44135
-    targetPort: http
 EOF
-kubectl patch service tiller-deploy -n kube-system --patch "$(cat /tmp/tiller-deploy.yaml)"
+
+helm init --client-only
 
 # Set up local helm server
 sudo -E tee /etc/systemd/system/helm-serve.service << EOF

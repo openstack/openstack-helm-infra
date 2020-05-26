@@ -19,7 +19,7 @@
 images:
   tags:
     process_exporter: docker.io/ncabatoff/process-exporter:0.2.11
-    dep_check: quay.io/stackanetes/kubernetes-entrypoint:v0.3.1
+    dep_check: quay.io/airshipit/kubernetes-entrypoint:v1.0.0
     image_repo_sync: docker.io/docker:17.07.0
   pull_policy: IfNotPresent
   local_registry:
@@ -64,11 +64,7 @@ pod:
         process_exporter:
           enabled: true
           min_ready_seconds: 0
-      revision_history: 3
-      pod_replacement_strategy: RollingUpdate
-      rolling_update:
-        max_unavailable: 1
-        max_surge: 3
+          max_unavailable: 1
     termination_grace_period:
       process_exporter:
         timeout: 30
@@ -147,6 +143,13 @@ endpoints:
     port:
       metrics:
         default: 9256
+
+network_policy:
+  process_exporter:
+    ingress:
+      - {}
+    egress:
+      - {}
 
 manifests:
   configmap_bin: true

@@ -27,10 +27,10 @@ images:
     prometheus_create_mysql_user: docker.io/mariadb:10.2.13
     prometheus_mysql_exporter: docker.io/prom/mysqld-exporter:v0.10.0
     prometheus_mysql_exporter_helm_tests: docker.io/openstackhelm/heat:newton-ubuntu_xenial
-    dep_check: quay.io/stackanetes/kubernetes-entrypoint:v0.3.1
+    dep_check: quay.io/airshipit/kubernetes-entrypoint:v1.0.0
     image_repo_sync: docker.io/docker:17.07.0
-    mariadb_backup: docker.io/openstackhelm/mariadb:latest-ubuntu_xenial
-    scripted_test: docker.io/openstackhelm/mariadb:latest-ubuntu_xenial
+    mariadb_backup: docker.io/openstackhelm/mariadb:ubuntu_xenial-20191031
+    scripted_test: docker.io/openstackhelm/mariadb:ubuntu_xenial-20191031
   pull_policy: "IfNotPresent"
   local_registry:
     active: false
@@ -59,6 +59,15 @@ labels:
     node_selector_value: enabled
 
 pod:
+  probes:
+    server:
+      mariadb:
+        readiness:
+          enabled: true
+          params:
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 15
   security_context:
     server:
       pod:
@@ -77,12 +86,13 @@ pod:
       container:
         server:
           runAsUser: 0
+          readOnlyRootFilesystem: false
     error_pages:
       pod:
-        runAsUser: 1000
+        runAsUser: 65534
       container:
         server:
-          runAsUser: 0
+          allowPrivilegeEscalation: false
           readOnlyRootFilesystem: true
     prometheus_mysql_exporter:
       pod:
@@ -91,12 +101,14 @@ pod:
         exporter:
           runAsUser: 99
           allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
     prometheus_create_mysql_user:
       pod:
         runAsUser: 0
       container:
         main:
           allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
     tests:
       pod:
         runAsUser: 999
@@ -490,11 +502,17 @@ network_policy:
       - {}
     egress:
       - {}
+  prometheus-mysql-exporter:
+    ingress:
+      - {}
+    egress:
+      - {}
 
 manifests:
   configmap_bin: true
   configmap_etc: true
   configmap_ingress_conf: true
+  configmap_ingress_etc: true
   configmap_services_tcp: true
   deployment_error: true
   deployment_ingress: true

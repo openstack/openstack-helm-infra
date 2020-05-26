@@ -230,17 +230,6 @@ limitations under the License.
     {{- if not $context.Values.__daemonset_yaml.metadata.name }}{{- $_ := set $context.Values.__daemonset_yaml.metadata "name" dict }}{{- end }}
     {{- $_ := set $context.Values.__daemonset_yaml.metadata "name" $current_dict.dns_1123_name }}
 
-    {{/* set container names and add to the list of containers for the pod */}}
-    {{- $_ := set $context.Values "__containers_list" ( list ) }}
-    {{- range $container := $context.Values.__daemonset_yaml.spec.template.spec.containers }}
-    {{- if eq $container.name "osd-pod" }}
-    {{- $_ := set $container "name" $current_dict.dns_1123_name }}
-    {{- end }}
-    {{- $__containers_list := append $context.Values.__containers_list $container }}
-    {{- $_ := set $context.Values "__containers_list" $__containers_list }}
-    {{- end }}
-    {{- $_ := set $context.Values.__daemonset_yaml.spec.template.spec "containers" $context.Values.__containers_list }}
-
     {{/* cross-reference configmap name to container volume definitions */}}
     {{- $_ := set $context.Values "__volume_list" list }}
     {{- range $current_volume := $context.Values.__daemonset_yaml.spec.template.spec.volumes }}
@@ -339,13 +328,13 @@ limitations under the License.
     {{- $tmpcontainerEnv := omit $context.Values._tmpYAMLcontainer "env" }}
     {{- if eq $v.data.type "bluestore" }}
     {{- if and $v.block_db $v.block_wal}}
-    {{ $containerEnv := prepend (prepend (prepend ( prepend (index $context.Values._tmpYAMLcontainer "env") (dict "name" "STORAGE_TYPE" "value" $v.data.type)) (dict "name" "STORAGE_LOCATION" "value" $v.data.location)) (dict "name" "BLOCK_DB" "value" $v.block_db)) (dict "name" "BLOCK_WAL" "value" $v.block_wal) }}
+    {{ $containerEnv := prepend (prepend (prepend ( prepend ( prepend ( prepend (index $context.Values._tmpYAMLcontainer "env") (dict "name" "STORAGE_TYPE" "value" $v.data.type)) (dict "name" "STORAGE_LOCATION" "value" $v.data.location)) (dict "name" "BLOCK_DB" "value" $v.block_db.location)) (dict "name" "BLOCK_DB_SIZE" "value" $v.block_db.size)) (dict "name" "BLOCK_WAL" "value" $v.block_wal.location)) (dict "name" "BLOCK_WAL_SIZE" "value" $v.block_wal.size) }}
     {{- $_ := set $tmpcontainerEnv "env" $containerEnv }}
     {{- else if $v.block_db }}
-    {{ $containerEnv := prepend (prepend ( prepend (index $context.Values._tmpYAMLcontainer "env") (dict "name" "STORAGE_TYPE" "value" $v.data.type)) (dict "name" "STORAGE_LOCATION" "value" $v.data.location)) (dict "name" "BLOCK_DB" "value" $v.block_db) }}
+    {{ $containerEnv := prepend (prepend ( prepend ( prepend (index $context.Values._tmpYAMLcontainer "env") (dict "name" "STORAGE_TYPE" "value" $v.data.type)) (dict "name" "STORAGE_LOCATION" "value" $v.data.location)) (dict "name" "BLOCK_DB" "value" $v.block_db.location)) (dict "name" "BLOCK_DB_SIZE" "value" $v.block_db.size) }}
     {{- $_ := set $tmpcontainerEnv "env" $containerEnv }}
     {{- else if $v.block_wal }}
-    {{ $containerEnv := prepend (prepend ( prepend (index $context.Values._tmpYAMLcontainer "env") (dict "name" "STORAGE_TYPE" "value" $v.data.type)) (dict "name" "STORAGE_LOCATION" "value" $v.data.location)) (dict "name" "BLOCK_WAL" "value" $v.block_wal) }}
+    {{ $containerEnv := prepend (prepend ( prepend ( prepend (index $context.Values._tmpYAMLcontainer "env") (dict "name" "STORAGE_TYPE" "value" $v.data.type)) (dict "name" "STORAGE_LOCATION" "value" $v.data.location)) (dict "name" "BLOCK_WAL" "value" $v.block_wal.location)) (dict "name" "BLOCK_WAL_SIZE" "value" $v.block_wal.size) }}
     {{- $_ := set $tmpcontainerEnv "env" $containerEnv }}
     {{ else }}
     {{ $containerEnv := prepend (prepend (index $context.Values._tmpYAMLcontainer "env") (dict "name" "STORAGE_TYPE" "value" $v.data.type)) (dict "name" "STORAGE_LOCATION" "value" $v.data.location) }}
@@ -368,13 +357,13 @@ limitations under the License.
     {{- $tmpinitcontainerEnv := omit $context.Values._tmpYAMLinitContainer "env" }}
     {{- if eq $v.data.type "bluestore" }}
     {{- if and $v.block_db $v.block_wal}}
-    {{ $initcontainerEnv := prepend (prepend (prepend ( prepend (index $context.Values._tmpYAMLinitContainer "env") (dict "name" "STORAGE_TYPE" "value" $v.data.type)) (dict "name" "STORAGE_LOCATION" "value" $v.data.location)) (dict "name" "BLOCK_DB" "value" $v.block_db)) (dict "name" "BLOCK_WAL" "value" $v.block_wal) }}
+    {{ $initcontainerEnv := prepend (prepend (prepend ( prepend ( prepend ( prepend (index $context.Values._tmpYAMLinitContainer "env") (dict "name" "STORAGE_TYPE" "value" $v.data.type)) (dict "name" "STORAGE_LOCATION" "value" $v.data.location)) (dict "name" "BLOCK_DB" "value" $v.block_db.location)) (dict "name" "BLOCK_DB_SIZE" "value" $v.block_db.size)) (dict "name" "BLOCK_WAL" "value" $v.block_wal.location)) (dict "name" "BLOCK_WAL_SIZE" "value" $v.block_wal.size) }}
     {{- $_ := set $tmpinitcontainerEnv "env" $initcontainerEnv }}
     {{- else if $v.block_db }}
-    {{ $initcontainerEnv := prepend (prepend ( prepend (index $context.Values._tmpYAMLinitContainer "env") (dict "name" "STORAGE_TYPE" "value" $v.data.type)) (dict "name" "STORAGE_LOCATION" "value" $v.data.location)) (dict "name" "BLOCK_DB" "value" $v.block_db) }}
+    {{ $initcontainerEnv := prepend (prepend ( prepend ( prepend (index $context.Values._tmpYAMLinitContainer "env") (dict "name" "STORAGE_TYPE" "value" $v.data.type)) (dict "name" "STORAGE_LOCATION" "value" $v.data.location)) (dict "name" "BLOCK_DB" "value" $v.block_db.location)) (dict "name" "BLOCK_DB_SIZE" "value" $v.block_db.size) }}
     {{- $_ := set $tmpinitcontainerEnv "env" $initcontainerEnv }}
     {{- else if $v.block_wal }}
-    {{ $initcontainerEnv := prepend (prepend ( prepend (index $context.Values._tmpYAMLinitContainer "env") (dict "name" "STORAGE_TYPE" "value" $v.data.type)) (dict "name" "STORAGE_LOCATION" "value" $v.data.location)) (dict "name" "BLOCK_WAL" "value" $v.block_wal) }}
+    {{ $initcontainerEnv := prepend (prepend ( prepend ( prepend (index $context.Values._tmpYAMLinitContainer "env") (dict "name" "STORAGE_TYPE" "value" $v.data.type)) (dict "name" "STORAGE_LOCATION" "value" $v.data.location)) (dict "name" "BLOCK_WAL" "value" $v.block_wal.location)) (dict "name" "BLOCK_WAL_SIZE" "value" $v.block_wal.size) }}
     {{- $_ := set $tmpinitcontainerEnv "env" $initcontainerEnv }}
     {{ else }}
     {{ $initcontainerEnv := prepend (prepend (index $context.Values._tmpYAMLinitContainer "env") (dict "name" "STORAGE_TYPE" "value" $v.data.type)) (dict "name" "STORAGE_LOCATION" "value" $v.data.location) }}

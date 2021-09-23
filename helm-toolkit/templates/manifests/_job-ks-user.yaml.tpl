@@ -73,6 +73,7 @@ spec:
       containers:
         - name: ks-user
           image: {{ $envAll.Values.images.tags.ks_user }}
+{{ dict "envAll" . "application" "app" | include "helm-toolkit.snippets.kubernetes_pod_security_context" | indent 8 }}
           imagePullPolicy: {{ $envAll.Values.images.pull_policy }}
 {{ tuple $envAll $envAll.Values.pod.resources.jobs.ks_user | include "helm-toolkit.snippets.kubernetes_resources" | indent 10 }}
           command:

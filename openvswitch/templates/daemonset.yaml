@@ -216,6 +216,10 @@ It should be handled through lcore and pmd core masks. */}}
           hostPath:
             path: /run
             type: Directory
+        - name: host-rootfs
+          hostPath:
+            path: /
+            type: Directory
 {{- if .Values.conf.ovs_dpdk.enabled }}
         - name: devs
           hostPath:

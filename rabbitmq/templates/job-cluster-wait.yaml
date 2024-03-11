@@ -60,7 +60,7 @@ spec:
 {{ tuple $envAll "rabbitmq" | include "helm-toolkit.snippets.kubernetes_tolerations" | indent 6 }}
 {{ end }}
       nodeSelector:
-        {{ $envAll.Values.labels.jobs.node_selector_key }}: {{ $envAll.Values.labels.test.node_selector_value | quote }}
+        {{ $envAll.Values.labels.jobs.node_selector_key }}: {{ $envAll.Values.labels.jobs.node_selector_value | quote }}
       initContainers:
 {{ tuple $envAll "cluster_wait" list | include "helm-toolkit.snippets.kubernetes_entrypoint_init_container" | indent 8 }}
         - name: rabbitmq-cookie

@@ -55,6 +55,12 @@ spec:
         configmap-bin-hash: {{ tuple "configmap-bin.yaml" . | include "helm-toolkit.utils.hash" }}
     spec:
       serviceAccountName: {{ $serviceAccountName }}
+      # -------------- Add by Simon Start --------------
+      {{- if and .Values.pod.tolerations.ovn_ovsdb_nb.enabled .Values.pod.tolerations.ovn_ovsdb_nb.tolerations }}
+      tolerations:
+      {{- toYaml .Values.pod.tolerations.ovn_ovsdb_nb.tolerations | nindent 8 }}
+      {{- end }}
+      # -------------- Add by Simon End --------------
       affinity:
 {{- tuple $envAll "ovn" "ovn-ovsdb-nb" | include "helm-toolkit.snippets.kubernetes_pod_anti_affinity" | indent 8 }}
       nodeSelector:

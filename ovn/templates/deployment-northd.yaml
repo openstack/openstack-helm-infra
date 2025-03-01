@@ -49,6 +49,12 @@ spec:
         configmap-bin-hash: {{ tuple "configmap-bin.yaml" . | include "helm-toolkit.utils.hash" }}
     spec:
       serviceAccountName: {{ $serviceAccountName }}
+      # -------------- Add by Simon Start --------------
+      {{- if and .Values.pod.tolerations.ovn_northd.enabled .Values.pod.tolerations.ovn_northd.tolerations }}
+      tolerations:
+      {{- toYaml .Values.pod.tolerations.ovn_northd.tolerations | nindent 8 }}
+      {{- end }}
+      # -------------- Add by Simon End --------------
       nodeSelector:
         {{ .Values.labels.ovn_northd.node_selector_key }}: {{ .Values.labels.ovn_northd.node_selector_value }}
       initContainers:

@@ -52,6 +52,12 @@ spec:
         configmap-etc-hash: {{ tuple "configmap-etc.yaml" . | include "helm-toolkit.utils.hash" }}
     spec:
       serviceAccountName: {{ $serviceAccountName }}
+      # -------------- Add by Simon Start --------------
+      {{- if and $envAll.Values.pod.tolerations.ovn_controller.enabled $envAll.Values.pod.tolerations.ovn_controller.tolerations }}
+      tolerations:
+      {{- toYaml $envAll.Values.pod.tolerations.ovn_controller.tolerations | nindent 8 }}
+      {{- end }}
+      # -------------- Add by Simon End --------------
       hostNetwork: true
       hostPID: true
       hostIPC: true

@@ -1,5 +1,0 @@
----
-conf:
-  openvswitch_db_server:
-    ptcp_port: 6640
-...

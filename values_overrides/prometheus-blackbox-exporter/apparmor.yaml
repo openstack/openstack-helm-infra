@@ -1,7 +1,0 @@
----
-pod:
-  mandatory_access_control:
-    type: apparmor
-    prometheus-blackbox-exporter:
-      blackbox-exporter: runtime/default
-...

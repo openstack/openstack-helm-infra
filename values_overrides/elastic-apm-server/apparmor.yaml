@@ -1,8 +1,0 @@
----
-pod:
-  mandatory_access_control:
-    type: apparmor
-    elastic-apm-server:
-      init: runtime/default
-      elastic-apm-server: runtime/default
-...

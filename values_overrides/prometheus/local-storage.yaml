@@ -1,9 +1,0 @@
----
-pod:
-  replicas:
-    prometheus: 1
-storage:
-  requests:
-    storage: 1Gi
-  storage_class: local-storage
-...

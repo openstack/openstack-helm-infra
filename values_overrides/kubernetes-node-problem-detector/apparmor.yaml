@@ -1,8 +1,0 @@
----
-pod:
-  mandatory_access_control:
-    type: apparmor
-    node-problem-detector:
-      node-problem-detector: runtime/default
-      init: runtime/default
-...

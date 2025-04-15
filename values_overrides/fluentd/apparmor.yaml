@@ -1,8 +1,0 @@
----
-pod:
-  mandatory_access_control:
-    type: apparmor
-    fluentd:
-      fluentd: runtime/default
-      init: runtime/default
-...
